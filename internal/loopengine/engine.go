@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/arturklasa/forge/internal/backend"
+	"github.com/arturklasa/forge/internal/brain"
+	"github.com/arturklasa/forge/internal/compdet"
+	"github.com/arturklasa/forge/internal/ctxmgr"
 	"github.com/arturklasa/forge/internal/escalate"
 	forgegit "github.com/arturklasa/forge/internal/git"
 	"github.com/arturklasa/forge/internal/policy"
@@ -53,6 +56,14 @@ type Options struct {
 	// EscalationManager handles human escalations (policy gates, stuck-dead, etc.).
 	// If nil, hard stops break the loop without waiting for a human response.
 	EscalationManager *escalate.Manager
+
+	// Brain provides LLM meta-call primitives (Diagnose, Draft, Judge, etc.).
+	// If nil, stub behaviours are used (same as pre-step-17).
+	Brain *brain.Brain
+
+	// ContextBudgetTokens is the token budget for prompt assembly.
+	// 0 means use the default (100k tokens).
+	ContextBudgetTokens int
 }
 
 // Result summarises the completed loop.
@@ -95,6 +106,9 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 
 	result := &Result{}
 
+	// Build context manager (uses Brain if available, else fallback).
+	ctxMgr := ctxmgr.New(runDir, opts.Brain)
+
 	for i := 1; i <= opts.MaxIterations; i++ {
 		if err := deadlineCtx.Err(); err != nil {
 			break
@@ -102,8 +116,8 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 
 		iterStart := opts.Clock()
 
-		// Assemble prompt.
-		promptBody, err := assemblePrompt(runDir)
+		// Assemble prompt via Context Manager (real distillation + token budget).
+		promptBody, err := ctxMgr.AssemblePrompt(deadlineCtx, path, opts.ContextBudgetTokens)
 		if err != nil {
 			return nil, fmt.Errorf("iter %d assemble prompt: %w", i, err)
 		}
@@ -205,7 +219,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 				}
 
 				if !policyHardStop {
-					msg := fmt.Sprintf("forge(%s): iter %d", path, i)
+					msg := brainCommitMessage(deadlineCtx, opts.Brain, path, i, string(diff))
 					if commitErr := opts.GitHelper.CommitStaged(deadlineCtx, msg); commitErr == nil {
 						result.Commits++
 						sha, _, shaErr := opts.GitHelper.HEAD(deadlineCtx)
@@ -251,8 +265,11 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		entry.StuckHardTriggers = stuckResult.HardTriggers
 		entry.StuckSoftSum = stuckResult.SoftSum
 
+		// Call Brain.Judge for completion assessment when available.
+		judgeVerdict := judgeCompletion(deadlineCtx, opts.Brain, runDir, iterResult.FinalText)
+
 		// Completion detector.
-		compSignals := buildCompletionSignals(entry, false)
+		compSignals := buildCompletionSignals(entry, false, judgeVerdict)
 		compResult := buildCompletion(compSignals)
 		entry.CompletionScore = compResult.Score
 		// Override TASK_COMPLETE with completion detector threshold.
@@ -335,9 +352,17 @@ func handleStuckTier(
 ) (bool, bool, error) {
 	switch result.Tier {
 	case stuckdet.TierSoftStuck:
-		// Tier 1: Brain.Diagnose (stub until step 17) — append finding to state.md.
+		// Tier 1: Brain.Diagnose — append diagnosis + suggestion to state.md.
 		finding := fmt.Sprintf("\n\n## Stuck Detector — Iter %d (Tier 1: soft-stuck)\n\nSignals: %v\nSoft sum: %d\n",
 			iteration, result.FiringSignals, result.SoftSum)
+		if opts.Brain != nil {
+			stateData, _ := os.ReadFile(filepath.Join(runDir, "state.md"))
+			ledgerWindow := ledgerSummary(runDir, 5)
+			diag, err := opts.Brain.Diagnose(ctx, ledgerWindow, string(stateData))
+			if err == nil {
+				finding += fmt.Sprintf("Diagnosis: %s\nSuggestion: %s\n", diag.Diagnosis, diag.Suggestion)
+			}
+		}
 		stateMD := filepath.Join(runDir, "state.md")
 		f, err := os.OpenFile(stateMD, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
 		if err == nil {
@@ -347,9 +372,20 @@ func handleStuckTier(
 		return true, false, nil
 
 	case stuckdet.TierHardStuck:
-		// Tier 2: Brain.Draft (stub until step 17) — append regeneration notice to plan.md.
-		notice := fmt.Sprintf("\n\n## Stuck Detector — Iter %d (Tier 2: hard-stuck)\n\nSignals: %v\nPlan regeneration triggered (Brain.Draft stub — real regeneration in step 17).\n",
+		// Tier 2: Brain.Draft — regenerate plan.md or append notice.
+		notice := fmt.Sprintf("\n\n## Stuck Detector — Iter %d (Tier 2: hard-stuck)\n\nSignals: %v\n",
 			iteration, result.FiringSignals)
+		if opts.Brain != nil {
+			taskData, _ := os.ReadFile(filepath.Join(runDir, "task.md"))
+			stateData, _ := os.ReadFile(filepath.Join(runDir, "state.md"))
+			draftCtx := fmt.Sprintf("Task:\n%s\n\nCurrent state:\n%s\n\nPrevious signals: %v", taskData, stateData, result.FiringSignals)
+			newPlan, err := opts.Brain.Draft(ctx, "a revised implementation plan as a numbered list", draftCtx)
+			if err == nil && newPlan != "" {
+				notice += "Revised plan:\n" + newPlan + "\n"
+			}
+		} else {
+			notice += "Plan regeneration: no Brain configured.\n"
+		}
 		planMD := filepath.Join(runDir, "plan.md")
 		f, err := os.OpenFile(planMD, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
 		if err == nil {
@@ -393,4 +429,76 @@ func diffPaths(diff string) []string {
 		}
 	}
 	return paths
+}
+
+// brainCommitMessage generates a commit message using Brain.Draft if available,
+// falling back to the standard template.
+func brainCommitMessage(ctx context.Context, br *brain.Brain, path string, iter int, diff string) string {
+	fallback := fmt.Sprintf("forge(%s): iter %d", path, iter)
+	if br == nil {
+		return fallback
+	}
+	draftCtx := fmt.Sprintf("Mode: %s, Iteration: %d\nDiff summary (first 2000 chars):\n%s",
+		path, iter, truncateStr(diff, 2000))
+	msg, err := br.Draft(ctx, "a concise git commit message (one line, imperative mood, no period)", draftCtx)
+	if err != nil || msg == "" {
+		return fallback
+	}
+	// Ensure it has the forge prefix.
+	if !strings.HasPrefix(msg, "forge(") {
+		msg = fmt.Sprintf("forge(%s): %s", path, msg)
+	}
+	return msg
+}
+
+// judgeCompletion calls Brain.Judge to assess task completion.
+// Returns JudgeUnknown when Brain is unavailable or on error.
+func judgeCompletion(ctx context.Context, br *brain.Brain, runDir string, finalText string) compdet.JudgeVerdict {
+	if br == nil {
+		return compdet.JudgeUnknown
+	}
+	taskData, _ := os.ReadFile(filepath.Join(runDir, "task.md"))
+	stateData, _ := os.ReadFile(filepath.Join(runDir, "state.md"))
+	result, err := br.Judge(ctx, string(taskData), string(stateData), truncateStr(finalText, 3000))
+	if err != nil {
+		return compdet.JudgeUnknown
+	}
+	switch result.Verdict {
+	case brain.VerdictComplete:
+		if result.Confidence == "high" {
+			return compdet.JudgeHigh
+		}
+		return compdet.JudgeMedium
+	case brain.VerdictIncomplete:
+		return compdet.JudgeIncomplete
+	case brain.VerdictAudit:
+		return compdet.JudgeMedium
+	default:
+		return compdet.JudgeUnknown
+	}
+}
+
+// ledgerSummary returns a brief text summary of the last n ledger entries.
+func ledgerSummary(runDir string, n int) string {
+	entries, err := readLedger(runDir)
+	if err != nil || len(entries) == 0 {
+		return "(no ledger entries)"
+	}
+	if len(entries) > n {
+		entries = entries[len(entries)-n:]
+	}
+	var lines []string
+	for _, e := range entries {
+		lines = append(lines, fmt.Sprintf("iter=%d files=%d build=%s stuck=%d completion=%d",
+			e.Iteration, len(e.FilesChanged), e.BuildStatus, e.StuckTier, e.CompletionScore))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// truncateStr truncates s to max chars.
+func truncateStr(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max]
 }

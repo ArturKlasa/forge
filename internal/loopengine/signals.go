@@ -65,14 +65,14 @@ func toStuckEntry(e LedgerEntry) stuckdet.Entry {
 }
 
 // buildCompletionSignals derives compdet.Signals from the current ledger entry.
-func buildCompletionSignals(entry LedgerEntry, allPlanItemsClosed bool) compdet.Signals {
+func buildCompletionSignals(entry LedgerEntry, allPlanItemsClosed bool, judgeVerdict compdet.JudgeVerdict) compdet.Signals {
 	return compdet.Signals{
 		TaskCompleteSentinel:     entry.Complete,
 		BuildPasses:              entry.BuildStatus == "pass",
 		TestsPasses:              len(entry.Regressions) == 0 && entry.BuildStatus == "pass",
 		PathSpecificProgrammatic: false, // wired in step 19+
 		AllPlanItemsClosed:       allPlanItemsClosed,
-		JudgeVerdict:             compdet.JudgeUnknown, // Brain.Judge wired in step 17
+		JudgeVerdict:             judgeVerdict,
 		PlaceholderHits:          entry.NewHighConfidencePlaceholders,
 	}
 }

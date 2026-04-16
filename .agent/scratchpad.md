@@ -240,3 +240,67 @@
 - Added natefinch/atomic v1.0.1 dependency
 
 **Next: Step 15** — Notifier — 5-channel cascade + env-probe
+
+## 2026-04-16 — Iteration 15
+
+### Completed: Step 15 — Notifier — 5-channel cascade + env-probe
+
+**What was done:**
+- Created `internal/notify` package with 5 channels:
+  - `FileSink`: writes `.forge/current/ESCALATION` sentinel file
+  - `BannerSink`: writes loud ASCII banner to m.Output AND /dev/tty (bypasses --quiet)
+  - `OSCSink`: emits OSC 9 escape + bell to stdout + /dev/tty (iTerm2/WezTerm/Kitty)
+  - `TmuxSink`: calls `tmux display-message` when $TMUX set
+  - `BeepSink`: OS-native via gen2brain/beeep
+- `Channel` interface, `Message` type, `NotifyAll()` (fail-loud: each channel independent)
+- `EnvProbe` struct + `Probe()` function: reads $DBUS_SESSION_BUS_ADDRESS, $DISPLAY, $WAYLAND_DISPLAY, $SSH_TTY, $TMUX, /proc/version WSL detection, $CI
+- `DefaultChannels(runDir, output)` builds standard cascade order
+- `SendTestNotify()` for `forge doctor --test-notify` (hidden flag)
+- Integrated into EscalationManager: replaced inline sentinel write + printBanner() with notify.NotifyAll() using lazily-built DefaultChannels
+- Manager.Channels field for test injection; lazy build uses m.Output at Escalate() time
+- Added env-probe output to `forge doctor`; `--test-notify` hidden flag fires all channels
+- 11 notify tests pass + all existing escalate/cli tests still green
+
+**Next: Step 16** — Stuck Detector (hybrid scoring) + Completion Detector
+
+## 2026-04-16 — Iteration 16
+
+### Completed: Step 16 — Stuck Detector + Completion Detector
+
+**What was done:**
+- Created `internal/stuckdet` package: 4 hard signals (off_topic_drift→Tier2, placeholder_accumulation→Tier2, same_error_fingerprint_4plus→Tier3, build_broken_5plus→Tier3), 5 soft signals over 3-iter rolling window. External deaths excluded from scoring.
+- Created `internal/compdet` package: weighted multi-signal completion detector; ≥8+judge_medium→Complete, 5-7→Audit, <5→Continue.
+- Extended `LedgerEntry` with 10 new fields: error_fingerprint, build_status, plan_items_completed, state_semantic_delta, agent_self_report, regressions, off_topic_drift, new_high_confidence_placeholders, stuck_tier, stuck_hard_triggers, stuck_soft_sum, completion_score.
+- Added `parseFinalTextSignals()`: parses `<!--FORGE:build_status/self_report/error_fp/regression=...-->` from FinalText.
+- Wired stuck detector + completion detector into loop engine post-commit.
+- Tier 1 action: append diagnostic to state.md. Tier 2: append plan regeneration notice to plan.md. Tier 3: escalate via EscalationManager.
+- Added `HighConfidencePlaceholderCount()` to policy.ScanResult.
+- 12 stuckdet unit tests + 9 compdet unit tests + 3 integration tests (Examples A/B/C) — all pass.
+- Full suite: all 20 packages green.
+
+**Next: Step 17** — Context Manager + Brain primitives
+
+## 2026-04-16 — Iteration 17
+
+### Completed: Step 17 — Context Manager + Brain primitives
+
+**What was done:**
+- Created `internal/brain` package: Brain struct with 6 primitives (Classify, Judge, Distill, Diagnose, Draft, Spawn)
+  - Each builds a scoped prompt + invokes Backend with 120s timeout
+  - Parse via prompt-engineered sentinels (key=value format); one retry on parse failure with correction prompt
+  - 7 brain tests (skip in sandbox, compile + run correctly)
+- Created `internal/ctxmgr` package: Context Manager with real prompt assembly + distillation
+  - AssemblePrompt: 7-section composition order (system prompt, task.md, path artifact, plan.md, state.md, notes.md, per-iteration instructions)
+  - Token budget enforcement via 4 chars/token heuristic; sections truncated when budget exhausted
+  - Distillation triggers: state.md > 8k, notes.md > 10k, plan.md > 6k tokens
+  - No Brain: archive + truncate fallback. With Brain: archive + LLM compress
+  - 9 ctxmgr tests all pass
+- Updated loop engine:
+  - Options.Brain + Options.ContextBudgetTokens fields added
+  - AssemblePrompt now uses ctxmgr.Manager instead of naive concatenation
+  - Brain.Draft used for commit messages when available
+  - Brain.Judge called post-iteration; verdict fed into completion detector (replaces JudgeUnknown stub)
+  - Brain.Diagnose called in Tier 1 stuck handler; Brain.Draft called in Tier 2 plan regeneration
+- Full suite: all 20 packages green
+
+**Next: Step 18** — Gemini + Kiro backend adapters
