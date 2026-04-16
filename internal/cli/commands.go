@@ -13,6 +13,8 @@ import (
 
 	"github.com/arturklasa/forge/internal/backend"
 	claudebackend "github.com/arturklasa/forge/internal/backend/claude"
+	geminibackend "github.com/arturklasa/forge/internal/backend/gemini"
+	kirobackend "github.com/arturklasa/forge/internal/backend/kiro"
 	"github.com/arturklasa/forge/internal/config"
 	forgegit "github.com/arturklasa/forge/internal/git"
 	forgelog "github.com/arturklasa/forge/internal/log"
@@ -254,8 +256,12 @@ func newTestUtilityCmd() *cobra.Command {
 			switch backendName {
 			case "claude":
 				b = claudebackend.New()
+			case "gemini":
+				b = geminibackend.New()
+			case "kiro":
+				b = kirobackend.New()
 			default:
-				return fmt.Errorf("unknown backend %q (supported: claude)", backendName)
+				return fmt.Errorf("unknown backend %q (supported: claude, gemini, kiro)", backendName)
 			}
 
 			result, err := b.RunIteration(context.Background(), backend.Prompt{Path: promptFile}, backend.IterationOpts{})

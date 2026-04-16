@@ -174,6 +174,69 @@ func runACP(in io.Reader, out io.Writer, entries []ScriptEntry) int {
 	return exitCode
 }
 
+// runGeminiStreamJSON emits Gemini-shaped NDJSON events: init, message, result.
+func runGeminiStreamJSON(in io.Reader, out io.Writer, entries []ScriptEntry) int {
+	prompt := readAll(in)
+	entry := Match(entries, prompt)
+
+	emit := func(v any) {
+		b, _ := json.Marshal(v)
+		fmt.Fprintln(out, string(b))
+	}
+
+	emit(map[string]any{
+		"type":  "init",
+		"model": "gemini-2.5-pro",
+	})
+
+	emit(map[string]any{
+		"type": "message",
+		"text": entry.Response,
+		"role": "model",
+	})
+
+	resultEvt := map[string]any{
+		"type": "result",
+		"stats": map[string]any{
+			"models": map[string]any{
+				"gemini-2.5-pro": map[string]any{
+					"tokens": map[string]any{
+						"prompt":     5,
+						"candidates": 10,
+						"total":      15,
+					},
+				},
+			},
+		},
+	}
+	if entry.ExitCode == 53 {
+		resultEvt["error"] = map[string]any{
+			"type":    "turn_limit",
+			"message": "Turn limit exceeded",
+			"code":    53,
+		}
+	} else if entry.ExitCode != 0 {
+		resultEvt["error"] = map[string]any{
+			"type":    "api_error",
+			"message": entry.Response,
+			"code":    entry.ExitCode,
+		}
+	}
+	emit(resultEvt)
+
+	return entry.ExitCode
+}
+
+// runKiroText emits Kiro text output with the ▸ Credits: footer.
+func runKiroText(in io.Reader, out io.Writer, entries []ScriptEntry) int {
+	// Kiro takes prompt as positional arg but fake-backend reads from stdin for uniformity.
+	prompt := readAll(in)
+	entry := Match(entries, prompt)
+	fmt.Fprintln(out, entry.Response)
+	fmt.Fprintf(out, "\u25b8 Credits: 0.39 \u2022 Time: 1s\n")
+	return entry.ExitCode
+}
+
 func readAll(r io.Reader) string {
 	b, _ := io.ReadAll(r)
 	return strings.TrimSpace(string(b))

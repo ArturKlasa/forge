@@ -52,8 +52,12 @@ Script YAML format:
 				exitCode = runStreamJSON(os.Stdin, os.Stdout, entries)
 			case "acp":
 				exitCode = runACP(os.Stdin, os.Stdout, entries)
+			case "gemini-stream-json":
+				exitCode = runGeminiStreamJSON(os.Stdin, os.Stdout, entries)
+			case "kiro-text":
+				exitCode = runKiroText(os.Stdin, os.Stdout, entries)
 			default:
-				return fmt.Errorf("unknown mode %q (want text, stream-json, or acp)", mode)
+				return fmt.Errorf("unknown mode %q (want text, stream-json, acp, gemini-stream-json, or kiro-text)", mode)
 			}
 
 			os.Exit(exitCode)
@@ -61,7 +65,7 @@ Script YAML format:
 		},
 	}
 
-	cmd.Flags().StringVarP(&mode, "mode", "m", "text", "output mode: text, stream-json, or acp")
+	cmd.Flags().StringVarP(&mode, "mode", "m", "text", "output mode: text, stream-json, acp, gemini-stream-json, or kiro-text")
 	cmd.Flags().StringVarP(&script, "script", "s", "", "path to script file (.csv or .yaml)")
 
 	return cmd
