@@ -1,0 +1,9 @@
+- pattern: "create a hello-world"
+  response: "Here's a hello.go file that prints Hello World"
+  exit_code: 0
+- pattern: "fix the bug"
+  response: "I have fixed the bug by correcting the off-by-one error"
+  exit_code: 0
+- pattern: "error"
+  response: "Something went wrong"
+  exit_code: 1

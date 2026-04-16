@@ -33,7 +33,7 @@ Each checkbox corresponds 1:1 to a step below. Tick as you complete each step's 
 - [x] **Step 5:** Single-run lock with PID + start-time tuple
 - [x] **Step 6:** Git helper (shell-out wrapper)
 - [x] **Step 7:** Process wrapper (Job Object / setsid + SIGTERM→SIGKILL escalation)
-- [ ] **Step 8:** Backend interface + fake-backend test binary
+- [x] **Step 8:** Backend interface + fake-backend test binary
 - [ ] **Step 9:** Claude Code backend adapter
 - [ ] **Step 10:** Intent Router — keyword + LLM classifier + escalation ladder
 - [ ] **Step 11:** Plan Phase (Create path) + confirmation UI
