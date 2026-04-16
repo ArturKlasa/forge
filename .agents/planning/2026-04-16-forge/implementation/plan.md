@@ -41,7 +41,7 @@ Each checkbox corresponds 1:1 to a step below. Tick as you complete each step's 
 - [x] **Step 13:** Policy scanners — Security (gitleaks) + Placeholder + Gate
 - [x] **Step 14:** Escalation Manager — mailbox pair + `awaiting-human.md` / `answer.md` flow
 - [x] **Step 15:** Notifier — 5-channel cascade + env-probe
-- [ ] **Step 16:** Stuck Detector (hybrid scoring) + Completion Detector
+- [x] **Step 16:** Stuck Detector (hybrid scoring) + Completion Detector
 - [ ] **Step 17:** Context Manager + Brain primitives (Classify / Judge / Distill / Diagnose / Draft)
 - [ ] **Step 18:** Gemini + Kiro backend adapters
 - [ ] **Step 19:** Add, Fix, Refactor paths (brownfield loop-mode variants)

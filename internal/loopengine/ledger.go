@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+// SemanticDelta records whether state.md changed meaningfully this iteration.
+type SemanticDelta struct {
+	Changed bool `json:"changed"`
+}
+
 // LedgerEntry records the result of a single iteration.
 type LedgerEntry struct {
 	RunID        string    `json:"run_id"`
@@ -21,6 +26,21 @@ type LedgerEntry struct {
 	PromptTokens int       `json:"prompt_tokens"`
 	OutputTokens int       `json:"output_tokens"`
 	Complete     bool      `json:"complete"`
+
+	// Stuck detector fields (§4.13).
+	ErrorFingerprint              string        `json:"error_fingerprint,omitempty"`
+	BuildStatus                   string        `json:"build_status,omitempty"`
+	PlanItemsCompleted            []string      `json:"plan_items_completed,omitempty"`
+	StateSemanticDelta            SemanticDelta `json:"state_semantic_delta"`
+	AgentSelfReport               string        `json:"agent_self_report,omitempty"`
+	Regressions                   []string      `json:"regressions,omitempty"`
+	OffTopicDrift                 bool          `json:"off_topic_drift,omitempty"`
+	NewHighConfidencePlaceholders int           `json:"new_high_confidence_placeholders,omitempty"`
+	ExternalSignalDeath           bool          `json:"external_signal_death,omitempty"`
+	StuckTier                     int           `json:"stuck_tier"`
+	StuckHardTriggers             []string      `json:"stuck_hard_triggers,omitempty"`
+	StuckSoftSum                  int           `json:"stuck_soft_sum"`
+	CompletionScore               int           `json:"completion_score"`
 }
 
 type exitInfo struct {

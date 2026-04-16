@@ -380,6 +380,168 @@ const key = "AKIAY3T6Z7WQXV5MNPKR"
 	}
 }
 
+// TestStuckDetectorExampleA verifies a normal-progress loop stays at Tier 0 (no interruption).
+func TestStuckDetectorExampleA(t *testing.T) {
+	workDir, git := initGitRepo(t)
+	rd := makeRunDir(t, workDir)
+
+	iteration := 0
+	// 3 iterations with file changes + state.md updates → Tier 0.
+	mockBE := &iterCountBackend{
+		responses: []string{
+			"working on feature\n<!--FORGE:build_status=pass-->",
+			"more changes\n<!--FORGE:build_status=pass-->",
+			"TASK_COMPLETE\n<!--FORGE:build_status=pass-->",
+		},
+		iteration: &iteration,
+		onRun: func(i int) {
+			_ = os.WriteFile(filepath.Join(workDir, fmt.Sprintf("file%d.go", i)), []byte(fmt.Sprintf("// iter %d", i)), 0o644)
+			// Also update state.md to simulate real agent progress (prevents no_state_semantic_delta signal).
+			_ = os.WriteFile(filepath.Join(rd.Path, "state.md"), []byte(fmt.Sprintf("# State\nProgress: iter %d", i)), 0o644)
+		},
+	}
+
+	var out strings.Builder
+	res, err := Run(context.Background(), Options{
+		RunDir:        rd,
+		Backend:       mockBE,
+		GitHelper:     git,
+		StateManager:  state.NewManager(workDir),
+		MaxIterations: 10,
+		Path:          "create",
+		Output:        &out,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Iterations != 3 {
+		t.Errorf("iterations = %d, want 3", res.Iterations)
+	}
+	if !res.Complete {
+		t.Error("Complete = false; want true (Example A: no stuck → TASK_COMPLETE reached)")
+	}
+
+	entries, _ := readLedger(rd.Path)
+	for _, e := range entries {
+		if e.StuckTier != 0 {
+			t.Errorf("iter %d: StuckTier = %d, want 0 (Tier 0 progressing)", e.Iteration, e.StuckTier)
+		}
+	}
+}
+
+// TestStuckDetectorExampleB verifies soft-stuck window triggers Tier 2 (plan regenerated).
+func TestStuckDetectorExampleB(t *testing.T) {
+	workDir, git := initGitRepo(t)
+	rd := makeRunDir(t, workDir)
+
+	iteration := 0
+	// 3 iterations with NO file changes + self-report stuck → soft sum ≥ 6 → Tier 2.
+	// After Tier 2 action (plan.md appended), continue; then TASK_COMPLETE.
+	mockBE := &iterCountBackend{
+		responses: []string{
+			"working...\n<!--FORGE:self_report=stuck-->",
+			"still here\n<!--FORGE:self_report=stuck-->",
+			"uncertain\n<!--FORGE:self_report=uncertain-->",
+			"TASK_COMPLETE",
+		},
+		iteration: &iteration,
+		// No onRun: no files changed → no_files_changed_in_window fires.
+	}
+
+	var out strings.Builder
+	res, err := Run(context.Background(), Options{
+		RunDir:        rd,
+		Backend:       mockBE,
+		GitHelper:     git,
+		StateManager:  state.NewManager(workDir),
+		MaxIterations: 10,
+		Path:          "create",
+		Output:        &out,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !res.Complete {
+		t.Errorf("Complete = false; want true")
+	}
+
+	entries, _ := readLedger(rd.Path)
+	// Find an entry with StuckTier = 2 (hard-stuck action taken).
+	found := false
+	for _, e := range entries {
+		if e.StuckTier == 2 {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("no ledger entry with StuckTier=2; expected Tier 2 from soft-stuck signals")
+	}
+
+	// Verify plan.md was annotated (Tier 2 action).
+	planContent, err := os.ReadFile(filepath.Join(rd.Path, "plan.md"))
+	if err != nil {
+		t.Fatalf("read plan.md: %v", err)
+	}
+	if !strings.Contains(string(planContent), "Tier 2: hard-stuck") {
+		t.Error("plan.md missing Tier 2 annotation; expected Brain.Draft stub notice")
+	}
+}
+
+// TestStuckDetectorExampleC verifies same_error_fingerprint_4plus triggers Tier 3 (escalation).
+func TestStuckDetectorExampleC(t *testing.T) {
+	workDir, git := initGitRepo(t)
+	rd := makeRunDir(t, workDir)
+
+	iteration := 0
+	fp := "f3a2b81c"
+	// 4 iterations with same error fingerprint → Tier 3 (dead stuck).
+	mockBE := &iterCountBackend{
+		responses: []string{
+			fmt.Sprintf("build failed\n<!--FORGE:build_status=fail-->\n<!--FORGE:error_fp=%s-->", fp),
+			fmt.Sprintf("still failing\n<!--FORGE:build_status=fail-->\n<!--FORGE:error_fp=%s-->", fp),
+			fmt.Sprintf("same error\n<!--FORGE:build_status=fail-->\n<!--FORGE:error_fp=%s-->", fp),
+			fmt.Sprintf("same error\n<!--FORGE:build_status=fail-->\n<!--FORGE:error_fp=%s-->", fp),
+		},
+		iteration: &iteration,
+	}
+
+	var out strings.Builder
+	res, err := Run(context.Background(), Options{
+		RunDir:        rd,
+		Backend:       mockBE,
+		GitHelper:     git,
+		StateManager:  state.NewManager(workDir),
+		MaxIterations: 10,
+		Path:          "create",
+		Output:        &out,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Loop should have been interrupted by Tier 3 (no EscalationManager → break).
+	if res.Complete {
+		t.Error("Complete = true; want false (loop should have been broken by dead-stuck)")
+	}
+	if !strings.Contains(out.String(), "ESCALATION") && !strings.Contains(out.String(), "dead-stuck") {
+		t.Errorf("output missing escalation/dead-stuck indicator:\n%s", out.String())
+	}
+
+	entries, _ := readLedger(rd.Path)
+	found := false
+	for _, e := range entries {
+		if e.StuckTier == 3 {
+			found = true
+		}
+	}
+	if !found {
+		tiers := make([]int, len(entries))
+		for i, e := range entries {
+			tiers[i] = e.StuckTier
+		}
+		t.Errorf("no ledger entry with StuckTier=3; tiers per entry: %v", tiers)
+	}
+}
+
 // iterCountBackend is a test Backend that cycles through canned responses.
 type iterCountBackend struct {
 	responses []string

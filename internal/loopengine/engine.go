@@ -14,6 +14,7 @@ import (
 	forgegit "github.com/arturklasa/forge/internal/git"
 	"github.com/arturklasa/forge/internal/policy"
 	"github.com/arturklasa/forge/internal/state"
+	"github.com/arturklasa/forge/internal/stuckdet"
 )
 
 // Options configure a single Loop Engine run.
@@ -49,7 +50,7 @@ type Options struct {
 	// Clock overrides time.Now() for testing.
 	Clock func() time.Time
 
-	// EscalationManager handles human escalations (policy gates, etc.).
+	// EscalationManager handles human escalations (policy gates, stuck-dead, etc.).
 	// If nil, hard stops break the loop without waiting for a human response.
 	EscalationManager *escalate.Manager
 }
@@ -113,6 +114,10 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 			return nil, fmt.Errorf("iter %d write prompt: %w", i, err)
 		}
 
+		// Snapshot state.md before iteration for delta detection.
+		stateMDPath := filepath.Join(runDir, "state.md")
+		stateBefore, _ := os.ReadFile(stateMDPath)
+
 		// Invoke backend.
 		iterResult, err := opts.Backend.RunIteration(deadlineCtx, backend.Prompt{
 			Path: promptPath,
@@ -136,10 +141,18 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		complete := iterResult.CompletionSentinel ||
 			strings.Contains(iterResult.FinalText, "TASK_COMPLETE")
 
+		// Parse stuck-detector signal overrides from FinalText.
+		buildStatus, errorFP, selfReport, regressions := parseFinalTextSignals(iterResult.FinalText)
+
+		// Detect state.md semantic delta.
+		stateAfter, _ := os.ReadFile(stateMDPath)
+		stateDeltaChanged := string(stateBefore) != string(stateAfter)
+
 		// Stage all changes, scan, then commit (or unstage on hard stop).
 		policyHardStop := false
 		commitSHA := ""
 		changedFiles := []string{}
+		newHighConfPlaceholders := 0
 
 		if opts.GitHelper != nil {
 			dirty, dirtyErr := opts.GitHelper.IsDirty(deadlineCtx)
@@ -150,6 +163,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 
 				if opts.PolicyScanner != nil && len(diff) > 0 {
 					scan := opts.PolicyScanner.ScanIteration(diff, false)
+					newHighConfPlaceholders = scan.HighConfidencePlaceholderCount()
 					if err := policy.AppendPlaceholderLedger(runDir, scan.PlaceholderHits, i, "active"); err != nil {
 						return nil, fmt.Errorf("iter %d append placeholder ledger: %w", i, err)
 					}
@@ -204,20 +218,49 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 			}
 		}
 
-		// Append ledger entry.
+		// Build and append ledger entry (with stuck+completion fields).
 		entry := LedgerEntry{
-			RunID:        runID,
-			Iteration:    i,
-			StartedAt:    iterStart,
-			FinishedAt:   iterFinish,
-			DurationSec:  dur,
-			Exit:         exitInfo{Code: exitCode, Subtype: exitSubtype},
-			FilesChanged: changedFiles,
-			CommitSHA:    commitSHA,
-			PromptTokens: iterResult.TokensUsage.Input,
-			OutputTokens: iterResult.TokensUsage.Output,
-			Complete:     complete,
+			RunID:                         runID,
+			Iteration:                     i,
+			StartedAt:                     iterStart,
+			FinishedAt:                    iterFinish,
+			DurationSec:                   dur,
+			Exit:                          exitInfo{Code: exitCode, Subtype: exitSubtype},
+			FilesChanged:                  changedFiles,
+			CommitSHA:                     commitSHA,
+			PromptTokens:                  iterResult.TokensUsage.Input,
+			OutputTokens:                  iterResult.TokensUsage.Output,
+			Complete:                      complete,
+			BuildStatus:                   buildStatus,
+			ErrorFingerprint:              errorFP,
+			AgentSelfReport:               selfReport,
+			Regressions:                   regressions,
+			NewHighConfidencePlaceholders: newHighConfPlaceholders,
+			StateSemanticDelta:            SemanticDelta{Changed: stateDeltaChanged},
 		}
+
+		// Run stuck detector on the full ledger window (including current entry).
+		allEntries, _ := readLedger(runDir)
+		allEntries = append(allEntries, entry) // include current (not yet persisted)
+		stuckWindow := make([]stuckdet.Entry, len(allEntries))
+		for idx, e := range allEntries {
+			stuckWindow[idx] = toStuckEntry(e)
+		}
+		stuckResult := stuckdet.Evaluate(stuckWindow)
+		entry.StuckTier = int(stuckResult.Tier)
+		entry.StuckHardTriggers = stuckResult.HardTriggers
+		entry.StuckSoftSum = stuckResult.SoftSum
+
+		// Completion detector.
+		compSignals := buildCompletionSignals(entry, false)
+		compResult := buildCompletion(compSignals)
+		entry.CompletionScore = compResult.Score
+		// Override TASK_COMPLETE with completion detector threshold.
+		if !complete && compResult.ShouldComplete {
+			complete = true
+			entry.Complete = true
+		}
+
 		if appendErr := appendLedger(runDir, entry); appendErr != nil {
 			return nil, fmt.Errorf("iter %d append ledger: %w", i, appendErr)
 		}
@@ -225,8 +268,24 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		result.Iterations++
 
 		if policyHardStop {
-			result.CapReached = true // reuse flag — escalation pending
+			result.CapReached = true
 			break
+		}
+
+		// Handle stuck tier actions post-commit.
+		if !complete && stuckResult.Tier > stuckdet.TierProgressing {
+			stuckHandled, shouldBreak, err := handleStuckTier(deadlineCtx, opts, runDir, i, path, stuckResult)
+			if err != nil {
+				return nil, fmt.Errorf("iter %d stuck handler: %w", i, err)
+			}
+			if stuckHandled {
+				fmt.Fprintf(opts.Output, "[%s] iter %d · stuck=%s · signals=%v\n",
+					iterFinish.Format("15:04:05"), i, stuckTierLabel(stuckResult.Tier), stuckResult.FiringSignals)
+			}
+			if shouldBreak {
+				result.CapReached = true
+				break
+			}
 		}
 
 		// Print terminal summary line.
@@ -263,6 +322,61 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	return result, nil
+}
+
+// handleStuckTier performs the tier-specific action. Returns (acted, shouldBreak, err).
+func handleStuckTier(
+	ctx context.Context,
+	opts Options,
+	runDir string,
+	iteration int,
+	path string,
+	result stuckdet.Result,
+) (bool, bool, error) {
+	switch result.Tier {
+	case stuckdet.TierSoftStuck:
+		// Tier 1: Brain.Diagnose (stub until step 17) — append finding to state.md.
+		finding := fmt.Sprintf("\n\n## Stuck Detector — Iter %d (Tier 1: soft-stuck)\n\nSignals: %v\nSoft sum: %d\n",
+			iteration, result.FiringSignals, result.SoftSum)
+		stateMD := filepath.Join(runDir, "state.md")
+		f, err := os.OpenFile(stateMD, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
+		if err == nil {
+			_, _ = f.WriteString(finding)
+			f.Close()
+		}
+		return true, false, nil
+
+	case stuckdet.TierHardStuck:
+		// Tier 2: Brain.Draft (stub until step 17) — append regeneration notice to plan.md.
+		notice := fmt.Sprintf("\n\n## Stuck Detector — Iter %d (Tier 2: hard-stuck)\n\nSignals: %v\nPlan regeneration triggered (Brain.Draft stub — real regeneration in step 17).\n",
+			iteration, result.FiringSignals)
+		planMD := filepath.Join(runDir, "plan.md")
+		f, err := os.OpenFile(planMD, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
+		if err == nil {
+			_, _ = f.WriteString(notice)
+			f.Close()
+		}
+		return true, false, nil
+
+	case stuckdet.TierDeadStuck:
+		// Tier 3: escalate to human.
+		reason := stuckEscalationReason(result)
+		fmt.Fprintf(opts.Output, "[STUCK] iter %d · ESCALATION — %s\n", iteration, reason)
+
+		if opts.EscalationManager != nil {
+			esc := buildStuckEscalation(opts.EscalationManager.RunDir, iteration, path, reason, result, opts.Clock)
+			ans, escErr := opts.EscalationManager.Escalate(ctx, esc)
+			if escErr != nil || ans.OptionKey == "abort-auto" || ans.OptionKey == "d" {
+				return true, true, nil
+			}
+			// Any other answer (p=pivot, s=split, r=reset, a=apply) → break loop.
+			return true, true, nil
+		}
+		return true, true, nil
+
+	default:
+		return false, false, nil
+	}
 }
 
 // diffPaths extracts unique file paths from a unified diff.

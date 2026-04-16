@@ -18,6 +18,17 @@ type ScanResult struct {
 	GateHits []GateHit
 }
 
+// HighConfidencePlaceholderCount returns the number of high-confidence placeholder hits.
+func (r *ScanResult) HighConfidencePlaceholderCount() int {
+	count := 0
+	for _, h := range r.PlaceholderHits {
+		if h.Severity == SeverityHigh {
+			count++
+		}
+	}
+	return count
+}
+
 // HasHardStop returns true when any result requires immediate loop halt.
 func (r *ScanResult) HasHardStop() bool {
 	if len(r.SecretHits) > 0 {
