@@ -58,3 +58,111 @@
 - `forge config set backend.default claude` → sets key in repo config
 - `forge config get backend.default` → `claude`
 - `forge config` → prints full merged YAML with all defaults
+
+## 2026-04-16 — Iteration 4
+
+### Completed: Step 4 — State manager — run directories + lifecycle markers
+
+**What was done:**
+- Created `internal/state` package with `Manager`, `RunDir`, lifecycle `Marker` constants
+- Atomic marker transitions via `renameio` (write new → remove old), ensuring no two markers visible simultaneously
+- `currentRunRef` abstraction: symlink on Unix, text file on Windows (with fallback detection)
+- `Manager.Init()` creates `.forge/runs/` and idempotently adds `.forge/` to `.gitignore`
+- `forge status` now reads current run and displays ID + marker + elapsed time
+- Added hidden `forge test-utility create-test-run` dev command (to be removed before v1 ship)
+- 13 state tests + 2 CLI tests pass; full suite green
+
+**Demo verified:**
+- `forge status` → "No active run." when no run
+- `forge test-utility create-test-run test-2026-04-16-001 && forge status` → shows RUNNING
+
+## 2026-04-16 — Iteration 5
+
+### Completed: Step 5 — Single-run lock with PID + start-time tuple
+
+**What was done:**
+- Created `internal/state/lock` package with `Lock`, `Sidecar`, `ErrLocked` types
+- `Acquire(forgeDir, runID)` → `gofrs/flock` advisory lock + atomic sidecar JSON `{pid, run_id, start_time_ns, hostname}`
+- Stale-lock recovery in `handleConflict`: hostname mismatch → refuse; dead PID → stale; PID alive but start_time mismatch → PID reuse → stale; all match → ErrLocked
+- Linux start time via `/proc/<pid>/stat` field 22 + `/proc/stat btime`, CLK_TCK hardcoded to 100
+- Darwin start time via `unix.SysctlRaw("kern.proc.pid")` → KinfoProc.P_starttime
+- Windows start time via `GetProcessTimes`; Windows liveness via `OpenProcess + GetExitCodeProcess`
+- Network FS detection: Linux statfs magic numbers, Darwin Fstypename, Windows GetDriveType; fallback to PID-file-only mode
+- 7 tests all pass; concurrent test uses subprocess helper via TestMain env var pattern
+- Wired lock into `forge "<task>"` RunE; added `forge test-utility hold-lock` for demo
+- Demo verified: two terminals, lock contention shows correct ErrLocked message
+
+**Demo verified:**
+- `forge test-utility hold-lock demo-2026-04-16-143022` → "(running... lock held...)"
+- `forge "Fix the bug"` → "Error: another forge run is active / Run: demo-... (PID ...) / Run 'forge status' to inspect."
+
+## 2026-04-16 — Iteration 6
+
+### Completed: Step 6 — Git helper (shell-out wrapper)
+
+**What was done:**
+- Created `internal/git/git.go`: Git struct, all core operations (IsRepo, HEAD, IsDirty, CreateBranch, Checkout, Commit, ResetHard, DiffSinceLastCommit, Log, Tag, Version)
+- Created `internal/git/protected.go`: IsProtected with 8-tier strategy (config → GitHub rulesets API → legacy protection → GitLab → default branch → .github/rulesets/*.json → pre-commit hooks → offline convention fallback)
+- HumanConfirmation type-level safety gate on ResetHard
+- Log format uses \x1f separator (null bytes rejected by OS exec)
+- Added google/uuid dependency for UUID-v7 run IDs
+- 17 tests all pass covering all tiers + all core ops
+- Wired forge doctor to show git version, HEAD, protected branches
+- Demo: `forge doctor` → git version, HEAD, protected branches detected via offline convention
+
+## 2026-04-16 — Iteration 7
+
+### Completed: Step 7 — Process wrapper (Job Object / setsid + SIGTERM→SIGKILL escalation)
+
+**What was done:**
+- Created `internal/proc` package with 6 files
+- `ring_buffer.go`: thread-safe RingBuffer (default 64KiB), io.Writer implementation with wrap-around
+- `exit_classification.go`: ExitClassification enum (Normal/IterationFail/ForgeTerminated/ExternalSignal) + Result struct
+- `proc.go`: Wrapper type with New/Start/Terminate/Kill/Wait/RingBuffer/Cmd; stdout+stderr tee via io.MultiWriter; deadlock-free Wait (drains pipe goroutines first); idempotent Wait via sync.Once
+- `proc_unix.go`: SysProcAttr{Setpgid:true, Setsid:true}; Terminate sends SIGTERM to -pgid, SIGKILL after grace; classifyExit uses WaitStatus.Signaled() + forgeKilled flag
+- `proc_windows.go`: Job Object with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE; CREATE_SUSPENDED → AssignProcessToJobObject → ResumeThread
+- Tests skip gracefully when setpgid/setsid is blocked (sandbox detection via TestMain probe)
+- All tests pass (2 run, 7 skipped in sandbox due to setpgid restriction)
+
+**Environment note:**
+- This sandbox blocks setpgid/setsid syscalls. Added TestMain probe + skipIfNoSetpgid helper.
+- In a real environment, all subprocess tests would run.
+
+## 2026-04-16 — Iteration 8
+
+### Completed: Step 8 — Backend interface + fake-backend test binary
+
+**What was done:**
+- Created `internal/backend/backend.go`: Backend interface, Capabilities, Prompt, IterationOpts, IterationResult, Event, TokenUsage types per design §4.5
+- Created `cmd/fake-backend/` binary with 3 modes:
+  - `text`: reads prompt from stdin, matches against script, prints canned response
+  - `stream-json`: emits NDJSON matching Claude Code's shape (system/init, assistant, result events)
+  - `acp`: minimal JSON-RPC 2.0 server over stdio handling initialize/session/new/session/prompt
+- Script loading supports CSV and YAML formats; pattern matching is case-insensitive substring
+- 11 tests all pass including round-trip tests per mode, schema validation, and ACP sequence test
+- testdata/trivial.csv and trivial.yaml created
+
+**Decision note:** Used manual JSON-RPC 2.0 for fake-backend ACP mode (not sourcegraph/jsonrpc2) since the fake-backend only needs simple request-response. The real Kiro adapter (step 18) will use jsonrpc2 library.
+
+**Demo verified:**
+- `fake-backend --mode stream-json --script testdata/trivial.csv <<<"create a hello-world"` → 3 NDJSON lines with system/init, assistant, result events
+
+## 2026-04-16 — Iteration 9
+
+### Current Focus: Step 9 — Claude Code backend adapter
+
+**Plan:**
+1. Create `internal/backend/claude/adapter.go` — Adapter struct implementing Backend interface
+2. Build args: `claude --bare -p --output-format stream-json --verbose --permission-mode dontAsk --allowedTools <list> --session-id <uuid> --no-session-persistence`
+3. Stream parser: scan stdout line-by-line, JSON-decode, dispatch on `type` field
+4. Completion signal: `type == "result"`; extract TokenUsage from result.usage
+5. Timeout: use proc.Wrapper SIGTERM→SIGKILL; accept IterationOpts.Timeout
+6. Tests: use fake-backend binary as the `claude` executable via env var or adapter option
+7. Add `forge test-utility probe-backend claude <prompt-file>` command for demo
+8. Add `testdata/trivial-prompt.md` for demo
+9. Tick checkbox and commit
+
+**Key design decisions:**
+- Tests use fake-backend by overriding the executable path (ClaudeExecutable option)
+- Session ID: uuid.New() per call, always pass --no-session-persistence
+- Error subtypes: success, error_max_turns, error_max_budget_usd → map to IterationResult fields

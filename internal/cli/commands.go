@@ -8,6 +8,10 @@ import (
 	"syscall"
 	"time"
 
+	"context"
+
+	"github.com/arturklasa/forge/internal/backend"
+	claudebackend "github.com/arturklasa/forge/internal/backend/claude"
 	"github.com/arturklasa/forge/internal/config"
 	forgegit "github.com/arturklasa/forge/internal/git"
 	forgelog "github.com/arturklasa/forge/internal/log"
@@ -170,8 +174,43 @@ func newTestUtilityCmd() *cobra.Command {
 			return nil
 		},
 	}
+	probeBackend := &cobra.Command{
+		Use:   "probe-backend <backend-name> <prompt-file>",
+		Short: "Send a prompt through a backend adapter and print the result (for testing)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			backendName := args[0]
+			promptFile := args[1]
+
+			var b backend.Backend
+			switch backendName {
+			case "claude":
+				b = claudebackend.New()
+			default:
+				return fmt.Errorf("unknown backend %q (supported: claude)", backendName)
+			}
+
+			result, err := b.RunIteration(context.Background(), backend.Prompt{Path: promptFile}, backend.IterationOpts{})
+			if err != nil {
+				return fmt.Errorf("run iteration: %w", err)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Response: %s\n", result.FinalText)
+			fmt.Fprintf(cmd.OutOrStdout(), "Tokens: %d in / %d out\n", result.TokensUsage.Input, result.TokensUsage.Output)
+			exitLabel := "success"
+			if result.Error != nil {
+				exitLabel = result.Error.Error()
+			} else if result.Truncated {
+				exitLabel = "truncated"
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Exit: %s\n", exitLabel)
+			return result.Error
+		},
+	}
+
 	cmd.AddCommand(createTestRun)
 	cmd.AddCommand(holdLock)
+	cmd.AddCommand(probeBackend)
 	return cmd
 }
 
