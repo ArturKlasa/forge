@@ -27,7 +27,7 @@ When details are missing here, consult the design. This plan intentionally stays
 Each checkbox corresponds 1:1 to a step below. Tick as you complete each step's demo.
 
 - [x] **Step 1:** Project scaffolding + CLI skeleton
-- [ ] **Step 2:** Logger (slog + lipgloss) + terminal output modes
+- [x] **Step 2:** Logger (slog + lipgloss) + terminal output modes
 - [ ] **Step 3:** Config system (koanf) with layered precedence
 - [ ] **Step 4:** State manager — run directories + lifecycle markers
 - [ ] **Step 5:** Single-run lock with PID + start-time tuple

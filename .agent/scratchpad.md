@@ -22,3 +22,21 @@
 7. Set up Makefile
 8. Run tests + verify demo works
 9. Commit
+
+## 2026-04-16 — Iteration 2
+
+### Completed: Step 2 — Logger (slog + lipgloss) + terminal output modes
+
+**What was done:**
+- Created `internal/log/log.go`: Logger with slog text/JSON handlers, lipgloss renderer
+- Global singleton via `Init(Config)` + `G()` accessor
+- Strips timestamps in text mode via ReplaceAttr
+- JSON mode routes slog to UserOut (stdout) for machine parsing
+- NO_COLOR, CI, non-TTY all disable interactive/color mode
+- PersistentPreRunE in root.go wires flags → log.Init before any subcommand
+- Status stub now logs "status requested" via slog
+- 12 tests all passing
+
+**Demo verified:**
+- `forge --json status` → valid NDJSON to stdout
+- `NO_COLOR=1 forge --help` → no ANSI codes

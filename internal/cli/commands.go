@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	forgelog "github.com/arturklasa/forge/internal/log"
 	"github.com/spf13/cobra"
 )
 
@@ -40,6 +41,7 @@ func newStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show the status of the current or specified run",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			forgelog.G().Info("status requested", "implemented", false)
 			return fmt.Errorf("not implemented yet (scheduled for step 4)")
 		},
 	}

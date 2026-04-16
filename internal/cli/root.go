@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	forgelog "github.com/arturklasa/forge/internal/log"
 	"github.com/arturklasa/forge/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -27,6 +28,21 @@ Use a subcommand:
 		// SilenceErrors is set to true; main.go prints the error.
 		SilenceErrors: true,
 		Args:          cobra.ArbitraryArgs,
+		// PersistentPreRunE initialises the global logger from flags before any subcommand runs.
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			pf := cmd.Root().PersistentFlags()
+
+			verbose, _ := pf.GetBool("verbose")
+			quiet, _ := pf.GetBool("quiet")
+			jsonMode, _ := pf.GetBool("json")
+
+			forgelog.Init(forgelog.Config{
+				Verbose: verbose,
+				Quiet:   quiet,
+				JSON:    jsonMode,
+			})
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help()
