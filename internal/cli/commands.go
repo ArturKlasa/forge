@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/arturklasa/forge/internal/config"
 	forgelog "github.com/arturklasa/forge/internal/log"
+	"github.com/arturklasa/forge/internal/state"
 	"github.com/spf13/cobra"
 )
 
@@ -23,6 +25,7 @@ func RegisterCommands(root *cobra.Command) {
 		newBackendCmd(),
 		newConfigCmd(),
 		newDoctorCmd(),
+		newTestUtilityCmd(),
 	)
 }
 
@@ -38,18 +41,93 @@ func newPlanCmd() *cobra.Command {
 	}
 }
 
-// newStatusCmd returns the `status` subcommand stub.
+// newStatusCmd returns the `status` subcommand.
 func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show the status of the current or specified run",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			forgelog.G().Info("status requested", "implemented", false)
-			return fmt.Errorf("not implemented yet (scheduled for step 4)")
+			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			if workDir == "" {
+				var err error
+				workDir, err = os.Getwd()
+				if err != nil {
+					return err
+				}
+			}
+
+			mgr := state.NewManager(workDir)
+			if err := mgr.Init(); err != nil {
+				return fmt.Errorf("state init: %w", err)
+			}
+
+			current, err := mgr.CurrentRun()
+			if err != nil {
+				return fmt.Errorf("read current run: %w", err)
+			}
+			if current == nil {
+				fmt.Fprintln(cmd.OutOrStdout(), "No active run.")
+				return nil
+			}
+
+			mk, err := mgr.ReadMarker(current)
+			if err != nil {
+				return fmt.Errorf("read marker: %w", err)
+			}
+
+			elapsed := time.Since(current.StartedAt).Round(time.Second)
+			fmt.Fprintf(cmd.OutOrStdout(), "Run:   %s\nState: %s (started %s ago)\n",
+				current.ID, mk, elapsed)
+			return nil
 		},
 	}
 	cmd.Flags().Bool("verbose", false, "Show detailed status")
 	cmd.Flags().String("run", "", "Run ID to query")
+	return cmd
+}
+
+// newTestUtilityCmd returns the `test-utility` command used during development.
+// It will be removed before v1 ship.
+func newTestUtilityCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:    "test-utility",
+		Short:  "Development utilities (to be removed before v1 ship)",
+		Hidden: true,
+	}
+
+	createTestRun := &cobra.Command{
+		Use:   "create-test-run [id]",
+		Short: "Create a test run directory with RUNNING marker",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			if workDir == "" {
+				var err error
+				workDir, err = os.Getwd()
+				if err != nil {
+					return err
+				}
+			}
+
+			id := fmt.Sprintf("test-%s-001", time.Now().UTC().Format("2006-01-02"))
+			if len(args) == 1 {
+				id = args[0]
+			}
+
+			mgr := state.NewManager(workDir)
+			if err := mgr.Init(); err != nil {
+				return fmt.Errorf("state init: %w", err)
+			}
+
+			rd, err := mgr.CreateRun(id)
+			if err != nil {
+				return fmt.Errorf("create run: %w", err)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Created run: %s\nPath: %s\n", rd.ID, rd.Path)
+			return nil
+		},
+	}
+	cmd.AddCommand(createTestRun)
 	return cmd
 }
 

@@ -90,7 +90,6 @@ func TestUnimplementedStubs(t *testing.T) {
 		args []string
 		step int
 	}{
-		{[]string{"status"}, 4},
 		{[]string{"stop"}, 24},
 		{[]string{"resume"}, 24},
 		{[]string{"history"}, 24},
@@ -116,6 +115,38 @@ func TestUnimplementedStubs(t *testing.T) {
 				t.Errorf("expected step reference %q in error, got: %q", wantStep, err.Error())
 			}
 		})
+	}
+}
+
+// TestStatusCommand verifies forge status output with and without an active run.
+func TestStatusCommand(t *testing.T) {
+	dir := t.TempDir()
+
+	// No run yet — expect "No active run."
+	out, _, err := executeInDir(dir, "status")
+	if err != nil {
+		t.Fatalf("status (empty): %v", err)
+	}
+	if !strings.Contains(out, "No active run.") {
+		t.Errorf("expected 'No active run.', got: %q", out)
+	}
+
+	// Create a test run.
+	_, _, err = executeInDir(dir, "test-utility", "create-test-run", "test-2026-04-16-001")
+	if err != nil {
+		t.Fatalf("create-test-run: %v", err)
+	}
+
+	// Now status should show the run.
+	out, _, err = executeInDir(dir, "status")
+	if err != nil {
+		t.Fatalf("status (with run): %v", err)
+	}
+	if !strings.Contains(out, "test-2026-04-16-001") {
+		t.Errorf("expected run ID in output, got: %q", out)
+	}
+	if !strings.Contains(out, "RUNNING") {
+		t.Errorf("expected RUNNING in output, got: %q", out)
 	}
 }
 
