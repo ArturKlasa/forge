@@ -1,0 +1,65 @@
+Preflight: ✓ config ✓ hooks ✓ backend ✓ telegram ⚠ git ✓ paths ✓ tools ✓ specs (1 warning)
+[2m2026-04-16T20:44:42.467459Z[0m [33m WARN[0m [2mralph::loop_runner[0m[2m:[0m Interactive mode requested but stdout is not a TTY, falling back to autonomous
+[2m2026-04-16T20:44:42.468219Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T20:44:42.468242Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: false)
+[2m2026-04-16T20:44:42.468256Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 0 memories from store
+[2m2026-04-16T20:44:42.468264Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory store is empty - no memories to inject
+[2m2026-04-16T20:49:28.805442Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T20:49:28.805503Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: false)
+[2m2026-04-16T20:49:28.805518Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 0 memories from store
+[2m2026-04-16T20:49:28.805526Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory store is empty - no memories to inject
+[2m2026-04-16T20:53:35.370593Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T20:53:35.370630Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T20:53:35.380138Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 1 memories from store
+[2m2026-04-16T20:53:35.380156Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 1 memories (273 chars) into prompt
+[2m2026-04-16T20:53:35.380252Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 1 closed) into prompt
+[2m2026-04-16T21:03:14.830498Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T21:03:14.830575Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T21:03:14.830825Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 2 memories from store
+[2m2026-04-16T21:03:14.830847Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 2 memories (579 chars) into prompt
+[2m2026-04-16T21:03:14.830958Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 2 closed) into prompt
+[2m2026-04-16T21:07:16.303587Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T21:07:16.303628Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T21:07:16.303824Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 3 memories from store
+[2m2026-04-16T21:07:16.303845Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 3 memories (989 chars) into prompt
+[2m2026-04-16T21:07:16.304007Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 3 closed) into prompt
+[2m2026-04-16T21:20:29.194524Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T21:20:29.194577Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T21:20:29.194735Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 4 memories from store
+[2m2026-04-16T21:20:29.194749Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 4 memories (1445 chars) into prompt
+[2m2026-04-16T21:20:29.194906Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 4 closed) into prompt
+[2m2026-04-16T21:30:14.762411Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T21:30:14.762443Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T21:30:14.762570Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 5 memories from store
+[2m2026-04-16T21:30:14.762581Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 5 memories (1788 chars) into prompt
+[2m2026-04-16T21:30:14.762676Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 5 closed) into prompt
+[2m2026-04-16T21:37:23.629170Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T21:37:23.629226Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T21:37:23.629437Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 6 memories from store
+[2m2026-04-16T21:37:23.629491Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 6 memories (2276 chars) into prompt
+[2m2026-04-16T21:37:23.629739Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 6 closed) into prompt
+[2m2026-04-16T21:43:02.853783Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T21:43:02.853814Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T21:43:02.853942Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 7 memories from store
+[2m2026-04-16T21:43:02.853954Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 7 memories (2678 chars) into prompt
+[2m2026-04-16T21:43:02.854042Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 7 closed) into prompt
+[2m2026-04-16T21:48:28.351046Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T21:48:28.351075Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T21:48:28.351189Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 8 memories from store
+[2m2026-04-16T21:48:28.351202Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 8 memories (3174 chars) into prompt
+[2m2026-04-16T21:48:28.351301Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 8 closed) into prompt
+[2m2026-04-16T21:53:18.151344Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T21:53:18.151374Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T21:53:18.151508Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 9 memories from store
+[2m2026-04-16T21:53:18.151521Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 9 memories (3677 chars) into prompt
+[2m2026-04-16T21:53:18.151605Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 9 closed) into prompt
+[2m2026-04-16T22:06:39.700227Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T22:06:39.700279Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T22:06:39.700484Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 10 memories from store
+[2m2026-04-16T22:06:39.700506Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 10 memories (4244 chars) into prompt
+[2m2026-04-16T22:06:39.700663Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 10 closed) into prompt
+[2m2026-04-16T22:13:44.149641Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T22:13:44.149669Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T22:13:44.149796Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 11 memories from store
+[2m2026-04-16T22:13:44.149809Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 11 memories (4774 chars) into prompt
+[2m2026-04-16T22:13:44.149915Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 11 closed) into prompt

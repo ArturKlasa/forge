@@ -2,8 +2,8 @@ package loopengine
 
 import (
 	"context"
-	"os"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -14,6 +14,7 @@ import (
 	"github.com/arturklasa/forge/internal/backend"
 	claudebackend "github.com/arturklasa/forge/internal/backend/claude"
 	forgegit "github.com/arturklasa/forge/internal/git"
+	"github.com/arturklasa/forge/internal/policy"
 	"github.com/arturklasa/forge/internal/state"
 )
 
@@ -273,6 +274,109 @@ func TestEndToEnd_Commits(t *testing.T) {
 	}
 	if len(commits) != 3 {
 		t.Errorf("forge commits = %d, want 3", len(commits))
+	}
+}
+
+// TestPolicyScannerGateHalt verifies the loop halts when a policy gate is hit.
+func TestPolicyScannerGateHalt(t *testing.T) {
+	workDir, git := initGitRepo(t)
+	rd := makeRunDir(t, workDir)
+
+	iteration := 0
+	// Iteration 1: write a clean file. Iteration 2: write package.json (gate hit).
+	mockBE := &iterCountBackend{
+		responses: []string{"iter 1 ok", "iter 2 ok"},
+		iteration: &iteration,
+		onRun: func(i int) {
+			switch i {
+			case 1:
+				_ = os.WriteFile(filepath.Join(workDir, "main.go"), []byte("package main"), 0o644)
+			case 2:
+				_ = os.WriteFile(filepath.Join(workDir, "package.json"), []byte(`{"name":"test"}`), 0o644)
+			}
+		},
+	}
+
+	pscanner, err := policy.NewScanner("", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("policy.NewScanner: %v", err)
+	}
+
+	var out strings.Builder
+	res, err := Run(context.Background(), Options{
+		RunDir:        rd,
+		Backend:       mockBE,
+		GitHelper:     git,
+		StateManager:  state.NewManager(workDir),
+		MaxIterations: 10,
+		Path:          "create",
+		Output:        &out,
+		PolicyScanner: pscanner,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Loop should have stopped at iteration 2 due to gate hit.
+	if res.Iterations != 2 {
+		t.Errorf("iterations = %d, want 2", res.Iterations)
+	}
+	if res.Complete {
+		t.Error("Complete should be false after gate halt")
+	}
+	if !strings.Contains(out.String(), "ESCALATION") {
+		t.Errorf("output missing ESCALATION:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "dependency") {
+		t.Errorf("output missing 'dependency':\n%s", out.String())
+	}
+}
+
+// TestPolicyScannerSecretHalt verifies the loop halts on a secret hit.
+func TestPolicyScannerSecretHalt(t *testing.T) {
+	workDir, git := initGitRepo(t)
+	rd := makeRunDir(t, workDir)
+
+	iteration := 0
+	mockBE := &iterCountBackend{
+		responses: []string{"iter 1 ok", "iter 2 ok"},
+		iteration: &iteration,
+		onRun: func(i int) {
+			if i == 1 {
+				// Write a file with a fake AWS key (high entropy, not in allowlist).
+				content := `package main
+const key = "AKIAY3T6Z7WQXV5MNPKR"
+`
+				_ = os.WriteFile(filepath.Join(workDir, "config.go"), []byte(content), 0o644)
+			}
+		},
+	}
+
+	pscanner, err := policy.NewScanner("", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("policy.NewScanner: %v", err)
+	}
+
+	var out strings.Builder
+	res, err := Run(context.Background(), Options{
+		RunDir:        rd,
+		Backend:       mockBE,
+		GitHelper:     git,
+		StateManager:  state.NewManager(workDir),
+		MaxIterations: 10,
+		Path:          "create",
+		Output:        &out,
+		PolicyScanner: pscanner,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if res.Complete {
+		t.Error("Complete should be false after secret halt")
+	}
+	if !strings.Contains(out.String(), "ESCALATION") {
+		t.Errorf("output missing ESCALATION:\n%s", out.String())
 	}
 }
 

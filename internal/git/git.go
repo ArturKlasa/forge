@@ -152,6 +152,29 @@ func (g *Git) DiffSinceLastCommit(ctx context.Context) ([]byte, error) {
 	return g.run(ctx, "diff", "HEAD")
 }
 
+// StageAll stages all changes (new + modified + deleted).
+func (g *Git) StageAll(ctx context.Context) error {
+	_, err := g.run(ctx, "add", "-A")
+	return err
+}
+
+// DiffCached returns the diff of all staged changes vs HEAD.
+func (g *Git) DiffCached(ctx context.Context) ([]byte, error) {
+	return g.run(ctx, "diff", "--cached", "HEAD")
+}
+
+// UnstageAll resets the index to HEAD without touching the working tree.
+func (g *Git) UnstageAll(ctx context.Context) error {
+	_, err := g.run(ctx, "reset", "HEAD")
+	return err
+}
+
+// CommitStaged commits the already-staged index with the given message.
+func (g *Git) CommitStaged(ctx context.Context, message string) error {
+	_, err := g.run(ctx, "commit", "-m", message)
+	return err
+}
+
 // Log returns commits matching opts.
 func (g *Git) Log(ctx context.Context, opts LogOptions) ([]Commit, error) {
 	args := []string{"log", "--format=%H\x1f%s\x1f%an\x1f%aI"}

@@ -204,3 +204,21 @@
 **Key bug fixed:** Local `--path` flag in plan subcommand conflicted with root persistent `--path` (working dir), causing wrong workDir when --path was set. Renamed to --mode.
 
 **Next: Step 12** — Loop Engine — minimal Ralph loop, first end-to-end demo
+
+## 2026-04-16 — Iteration 13
+
+### Completed: Step 13 — Policy Scanners (Security + Placeholder + Gate)
+
+**What was done:**
+- Created `internal/policy` package with 3 sub-scanners + coordinator:
+  - `security.go`: SecurityScanner wrapping gitleaks v8 `detect` package. Uses isolated viper instance (not global). Supports custom `.gitleaks.toml` override. `DetectBytes()` on diff → SecretFinding list.
+  - `placeholder.go`: PlaceholderScanner with compiled regex table (11 patterns: 9 high-conf + 2 low-conf). Parses unified diff added lines; skips test files, `forge:allow-todo` inline suppression, `TODO(#N)` tracked forms. Hunk header parsing for accurate line numbers.
+  - `gate.go`: GateScanner with hardcoded path tables for dependency manifests, CI/CD pipelines, secret-env files, lockfiles. `testsPassed` flag controls lockfile-only auto-OK vs hard-stop classification.
+  - `policy.go`: Scanner coordinator, ScanResult, AppendPlaceholderLedger (writes placeholders.jsonl).
+- Added git helper methods: StageAll, DiffCached, UnstageAll, CommitStaged
+- Updated loop engine (engine.go): stage-then-scan-then-commit flow instead of diff-then-commit. Policy scanner wired between backend result and git commit. Hard stop → unstage, print ESCALATION, break loop.
+- 16 policy tests (all pass) + 2 new loop engine integration tests (PolicyScannerGateHalt, PolicyScannerSecretHalt)
+- Key finding: gitleaks allowlists `AKIAIOSFODNN7EXAMPLE` via stopword `.+EXAMPLE$` (AWS docs example key)
+- Key design: `git diff HEAD` doesn't show untracked files → must stage first for complete policy scan
+
+**Next: Step 14** — Escalation Manager (mailbox pair + fsnotify)

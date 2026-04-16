@@ -11,6 +11,7 @@ import (
 
 	"github.com/arturklasa/forge/internal/backend"
 	forgegit "github.com/arturklasa/forge/internal/git"
+	"github.com/arturklasa/forge/internal/policy"
 	"github.com/arturklasa/forge/internal/state"
 )
 
@@ -39,6 +40,10 @@ type Options struct {
 
 	// Output is where terminal summary lines are written.
 	Output io.Writer
+
+	// PolicyScanner runs after each backend iteration before commit.
+	// If nil, policy scanning is skipped.
+	PolicyScanner *policy.Scanner
 
 	// Clock overrides time.Now() for testing.
 	Clock func() time.Time
@@ -126,22 +131,42 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		complete := iterResult.CompletionSentinel ||
 			strings.Contains(iterResult.FinalText, "TASK_COMPLETE")
 
-		// Commit diff if non-empty.
+		// Stage all changes, scan, then commit (or unstage on hard stop).
+		policyHardStop := false
 		commitSHA := ""
 		changedFiles := []string{}
+
 		if opts.GitHelper != nil {
 			dirty, dirtyErr := opts.GitHelper.IsDirty(deadlineCtx)
 			if dirtyErr == nil && dirty {
-				// Capture diff before staging for file-list extraction.
-				diff, _ := opts.GitHelper.DiffSinceLastCommit(deadlineCtx)
-				msg := fmt.Sprintf("forge(%s): iter %d", path, i)
-				if commitErr := opts.GitHelper.CommitAll(deadlineCtx, msg); commitErr == nil {
-					result.Commits++
-					sha, _, shaErr := opts.GitHelper.HEAD(deadlineCtx)
-					if shaErr == nil {
-						commitSHA = sha
+				// Stage everything so we can get a complete diff (incl. new files).
+				_ = opts.GitHelper.StageAll(deadlineCtx)
+				diff, _ := opts.GitHelper.DiffCached(deadlineCtx)
+
+				if opts.PolicyScanner != nil && len(diff) > 0 {
+					scan := opts.PolicyScanner.ScanIteration(diff, false)
+					if err := policy.AppendPlaceholderLedger(runDir, scan.PlaceholderHits, i, "active"); err != nil {
+						return nil, fmt.Errorf("iter %d append placeholder ledger: %w", i, err)
 					}
-					changedFiles = diffPaths(string(diff))
+					if scan.HasHardStop() {
+						policyHardStop = true
+						reason := scan.HardStopReason()
+						fmt.Fprintf(opts.Output, "[%s] iter %d · ESCALATION — %s\n  Loop halted; run 'forge resume' or respond via .forge/current/answer.md\n",
+							opts.Clock().Format("15:04:05"), i, reason)
+						_ = opts.GitHelper.UnstageAll(deadlineCtx)
+					}
+				}
+
+				if !policyHardStop {
+					msg := fmt.Sprintf("forge(%s): iter %d", path, i)
+					if commitErr := opts.GitHelper.CommitStaged(deadlineCtx, msg); commitErr == nil {
+						result.Commits++
+						sha, _, shaErr := opts.GitHelper.HEAD(deadlineCtx)
+						if shaErr == nil {
+							commitSHA = sha
+						}
+						changedFiles = diffPaths(string(diff))
+					}
 				}
 			}
 		}
@@ -165,6 +190,11 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		}
 
 		result.Iterations++
+
+		if policyHardStop {
+			result.CapReached = true // reuse flag — escalation pending
+			break
+		}
 
 		// Print terminal summary line.
 		status := ""
