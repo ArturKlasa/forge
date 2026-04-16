@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/arturklasa/forge/internal/config"
+	forgegit "github.com/arturklasa/forge/internal/git"
 	forgelog "github.com/arturklasa/forge/internal/log"
 	"github.com/arturklasa/forge/internal/state"
 	forgelock "github.com/arturklasa/forge/internal/state/lock"
@@ -415,13 +416,70 @@ func newConfigEditCmd() *cobra.Command {
 	return cmd
 }
 
-// newDoctorCmd returns the `doctor` subcommand stub.
+// newDoctorCmd returns the `doctor` subcommand (partially wired in step 6: git checks).
 func newDoctorCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
 		Short: "Diagnose forge installation and dependencies",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not implemented yet (scheduled for step 24)")
+			return runDoctorGitChecks(cmd)
 		},
 	}
+}
+
+// runDoctorGitChecks performs git-related diagnostics for forge doctor.
+func runDoctorGitChecks(cmd *cobra.Command) error {
+	ctx := cmd.Context()
+
+	// git version
+	v, err := forgegit.Version(ctx)
+	if err != nil {
+		fmt.Fprintln(cmd.OutOrStdout(), "git: MISSING (install git and retry)")
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "git: OK (version %s)\n", v)
+	}
+
+	// repo check
+	workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+	if workDir == "" {
+		workDir, _ = os.Getwd()
+	}
+	g := forgegit.New(workDir)
+	if !g.IsRepo(ctx) {
+		fmt.Fprintln(cmd.OutOrStdout(), "repo: not a git repository")
+		return nil
+	}
+
+	sha, branch, err := g.HEAD(ctx)
+	if err != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "repo: ERROR (%v)\n", err)
+	} else {
+		short := sha
+		if len(short) > 7 {
+			short = short[:7]
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "repo: OK (HEAD=%s on %s)\n", short, branch)
+	}
+
+	// protected-branch detection
+	branches, source := g.DetectProtectedBranches(ctx, nil)
+	if len(branches) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "protected branches: none detected")
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "protected branches: %s (detected via %s)\n",
+			joinBranches(branches), source)
+	}
+
+	return nil
+}
+
+func joinBranches(branches []string) string {
+	result := ""
+	for i, b := range branches {
+		if i > 0 {
+			result += ", "
+		}
+		result += b
+	}
+	return result
 }

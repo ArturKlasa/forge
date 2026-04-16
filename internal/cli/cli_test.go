@@ -97,7 +97,7 @@ func TestUnimplementedStubs(t *testing.T) {
 		{[]string{"history"}, 24, false},
 		{[]string{"show", "fake-run-id"}, 24, false},
 		{[]string{"clean"}, 24, false},
-		{[]string{"doctor"}, 24, false},
+		// doctor is partially implemented in step 6 (git checks)
 		{[]string{"plan", "do something"}, 11, false},
 		{[]string{"some task description"}, 12, true},
 	}

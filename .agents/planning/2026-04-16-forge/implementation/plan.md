@@ -31,7 +31,7 @@ Each checkbox corresponds 1:1 to a step below. Tick as you complete each step's 
 - [x] **Step 3:** Config system (koanf) with layered precedence
 - [x] **Step 4:** State manager — run directories + lifecycle markers
 - [x] **Step 5:** Single-run lock with PID + start-time tuple
-- [ ] **Step 6:** Git helper (shell-out wrapper)
+- [x] **Step 6:** Git helper (shell-out wrapper)
 - [ ] **Step 7:** Process wrapper (Job Object / setsid + SIGTERM→SIGKILL escalation)
 - [ ] **Step 8:** Backend interface + fake-backend test binary
 - [ ] **Step 9:** Claude Code backend adapter
