@@ -17,6 +17,7 @@ import (
 	forgegit "github.com/arturklasa/forge/internal/git"
 	forgelog "github.com/arturklasa/forge/internal/log"
 	"github.com/arturklasa/forge/internal/loopengine"
+	"github.com/arturklasa/forge/internal/notify"
 	"github.com/arturklasa/forge/internal/planphase"
 	"github.com/arturklasa/forge/internal/router"
 	"github.com/arturklasa/forge/internal/state"
@@ -524,13 +525,19 @@ func newConfigEditCmd() *cobra.Command {
 
 // newDoctorCmd returns the `doctor` subcommand (partially wired in step 6: git checks).
 func newDoctorCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Diagnose forge installation and dependencies",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDoctorGitChecks(cmd)
+			if err := runDoctorGitChecks(cmd); err != nil {
+				return err
+			}
+			return runDoctorNotifyChecks(cmd)
 		},
 	}
+	cmd.Flags().Bool("test-notify", false, "Send a test notification through all channels (with consent)")
+	cmd.Flags().MarkHidden("test-notify")
+	return cmd
 }
 
 // runDoctorGitChecks performs git-related diagnostics for forge doctor.
@@ -576,6 +583,44 @@ func runDoctorGitChecks(cmd *cobra.Command) error {
 			joinBranches(branches), source)
 	}
 
+	return nil
+}
+
+// runDoctorNotifyChecks prints the env-probe results and optionally fires a
+// test notification through all channels.
+func runDoctorNotifyChecks(cmd *cobra.Command) error {
+	out := cmd.OutOrStdout()
+	p := notify.Probe()
+
+	fmt.Fprintln(out, "\n--- notification probe ---")
+	fmt.Fprintf(out, "dbus_session:    %v\n", p.DBusSession)
+	fmt.Fprintf(out, "display:         %v\n", p.Display)
+	fmt.Fprintf(out, "ssh_session:     %v\n", p.SSHSession)
+	fmt.Fprintf(out, "tmux_session:    %v\n", p.TmuxSession)
+	fmt.Fprintf(out, "wsl:             %v\n", p.IsWSL)
+	fmt.Fprintf(out, "ci:              %v\n", p.IsCI)
+	fmt.Fprintf(out, "notify_likely:   %v\n", p.NotifyLikelyReachesUser())
+
+	if p.RecommendAutoResolve() {
+		fmt.Fprintln(out, "WARN: OS notifications may not reach you in this environment.")
+		fmt.Fprintln(out, "      Consider: --auto-resolve accept-recommended")
+	}
+
+	testNotify, _ := cmd.Flags().GetBool("test-notify")
+	if !testNotify {
+		return nil
+	}
+
+	fmt.Fprintln(out, "\nSending test notification through all channels...")
+	channels := notify.DefaultChannels("", out)
+	attempts := notify.SendTestNotify(cmd.Context(), channels, out)
+	for _, a := range attempts {
+		status := "OK"
+		if !a.OK {
+			status = "FAIL (" + a.Err + ")"
+		}
+		fmt.Fprintf(out, "  %-10s %s\n", a.Channel+":", status)
+	}
 	return nil
 }
 

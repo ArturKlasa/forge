@@ -222,3 +222,21 @@
 - Key design: `git diff HEAD` doesn't show untracked files → must stage first for complete policy scan
 
 **Next: Step 14** — Escalation Manager (mailbox pair + fsnotify)
+
+## 2026-04-16 — Iteration 14
+
+### Completed: Step 14 — Escalation Manager (mailbox pair + fsnotify)
+
+**What was done:**
+- Created `internal/escalate` package (11 files):
+  - `escalate.go`: Manager type, Escalate() method, GateScannerEscalation() builder, --auto-resolve logic
+  - `mailbox.go`: renderAwaitingHuman() (YAML frontmatter format), ParseAnswer() with strict validation
+  - `atomic.go` + `atomic_unix.go` + `atomic_windows.go`: AtomicWrite shim (renameio on Unix, natefinch/atomic on Windows)
+  - `watcher.go`: fsnotify directory watch + 250ms debounce + size-stability check + 2s polling fallback
+  - `sidecar.go`: regex patterns for vim/JetBrains/emacs sidecar ignore
+  - `netfs_linux.go` + `netfs_other.go` + `netfs_windows.go`: network FS detection via statfs
+- 13 tests all pass: all 4 editor save styles, ID mismatch→stale rename, partial write race, network-FS polling, auto-resolve 5s, awaiting-human.md written, sidecar ignored, ParseAnswer valid/invalid
+- Loop engine updated: EscalationManager option; gate hard-stops now call Escalate() and dispatch on answer (a=commit, s=unstage+continue, p/d=break)
+- Added natefinch/atomic v1.0.1 dependency
+
+**Next: Step 15** — Notifier — 5-channel cascade + env-probe

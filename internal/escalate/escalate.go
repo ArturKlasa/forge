@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/arturklasa/forge/internal/notify"
 )
 
 // AutoResolveMode controls the --auto-resolve flag behaviour.
@@ -54,6 +56,8 @@ type Manager struct {
 	YesFlag     bool
 	Output      io.Writer
 	Clock       func() time.Time
+	// Channels is the notification cascade. If nil, DefaultChannels is used.
+	Channels []notify.Channel
 	// overrideable for tests
 	netFSOverride *bool
 }
@@ -81,8 +85,17 @@ func (m *Manager) isNetFS() bool {
 	return IsNetworkFS(m.RunDir)
 }
 
-// Escalate writes awaiting-human.md, displays a banner, then blocks until the
-// user provides a valid answer (via answer.md or --auto-resolve rules).
+// channels returns the effective notification cascade for this manager.
+// DefaultChannels is built lazily so that tests can set m.Output after NewManager.
+func (m *Manager) channels() []notify.Channel {
+	if m.Channels != nil {
+		return m.Channels
+	}
+	return notify.DefaultChannels(m.RunDir, m.Output)
+}
+
+// Escalate writes awaiting-human.md, fires the notification cascade, then
+// blocks until the user provides a valid answer (via answer.md or --auto-resolve).
 func (m *Manager) Escalate(ctx context.Context, esc *Escalation) (Answer, error) {
 	// 1. Write awaiting-human.md atomically.
 	content := renderAwaitingHuman(esc)
@@ -91,16 +104,14 @@ func (m *Manager) Escalate(ctx context.Context, esc *Escalation) (Answer, error)
 		return Answer{}, fmt.Errorf("write awaiting-human.md: %w", err)
 	}
 
-	// 2. Write ESCALATION sentinel (1-line summary).
-	sentinelPath := filepath.Join(m.RunDir, "ESCALATION")
-	sentinel := fmt.Sprintf("id: %s  tier: %d  iter: %d  path: %s\n",
-		esc.ID, esc.Tier, esc.Iteration, esc.Path)
-	if err := os.WriteFile(sentinelPath, []byte(sentinel), 0o644); err != nil {
-		return Answer{}, fmt.Errorf("write ESCALATION sentinel: %w", err)
+	// 2. Fire notification cascade (FileSink writes ESCALATION sentinel,
+	//    BannerSink prints the banner, then OSC/tmux/beeep).
+	msg := notify.Message{
+		Title:   "ESCALATION — Forge needs your decision",
+		Summary: fmt.Sprintf("id: %s  tier: %d  iter: %d  path: %s", esc.ID, esc.Tier, esc.Iteration, esc.Path),
+		Body:    m.buildBannerBody(esc),
 	}
-
-	// 3. Print banner.
-	m.printBanner(esc)
+	notify.NotifyAll(ctx, m.channels(), msg)
 
 	// 4. --auto-resolve abort applies to all escalations.
 	if m.AutoResolve == AutoResolveAbort {
@@ -203,9 +214,8 @@ func optionLabel(esc *Escalation, key string) string {
 	return key
 }
 
-// printBanner writes the escalation banner to m.Output.
-func (m *Manager) printBanner(esc *Escalation) {
-	line := strings.Repeat("=", 72)
+// buildBannerBody constructs the body text for the BannerSink.
+func (m *Manager) buildBannerBody(esc *Escalation) string {
 	var opts []string
 	for _, o := range esc.Options {
 		opts = append(opts, fmt.Sprintf("[%s] %s", o.Key, strings.ToLower(o.Label)))
@@ -214,15 +224,15 @@ func (m *Manager) printBanner(esc *Escalation) {
 	if esc.Recommended != "" {
 		rec = fmt.Sprintf("  ·  Recommended: [%s]", esc.Recommended)
 	}
-	fmt.Fprintf(m.Output, "%s\n", line)
-	fmt.Fprintf(m.Output, "ESCALATION — Forge needs your decision\n")
-	fmt.Fprintf(m.Output, "Run: iter %d · Tier %d · path: %s\n", esc.Iteration, esc.Tier, esc.Path)
-	if esc.Decision != "" {
-		fmt.Fprintf(m.Output, "%s\n", esc.Decision)
+	lines := []string{
+		fmt.Sprintf("Run: iter %d · Tier %d · path: %s", esc.Iteration, esc.Tier, esc.Path),
 	}
-	fmt.Fprintf(m.Output, "Options: %s%s\n", strings.Join(opts, "  "), rec)
-	fmt.Fprintf(m.Output, "%s\n", line)
-	fmt.Fprintf(m.Output, "  Respond: edit %s/answer.md\n\n", m.RunDir)
+	if esc.Decision != "" {
+		lines = append(lines, esc.Decision)
+	}
+	lines = append(lines, fmt.Sprintf("Options: %s%s", strings.Join(opts, "  "), rec))
+	lines = append(lines, fmt.Sprintf("  Respond: edit %s/answer.md", m.RunDir))
+	return strings.Join(lines, "\n")
 }
 
 // GateScannerEscalation builds an Escalation for a Gate Scanner hard stop.

@@ -63,3 +63,13 @@ Preflight: ✓ config ✓ hooks ✓ backend ✓ telegram ⚠ git ✓ paths ✓ t
 [2m2026-04-16T22:13:44.149796Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 11 memories from store
 [2m2026-04-16T22:13:44.149809Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 11 memories (4774 chars) into prompt
 [2m2026-04-16T22:13:44.149915Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 11 closed) into prompt
+[2m2026-04-16T22:21:19.072373Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T22:21:19.072420Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T22:21:19.072641Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 12 memories from store
+[2m2026-04-16T22:21:19.072667Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 12 memories (5358 chars) into prompt
+[2m2026-04-16T22:21:19.072832Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 12 closed) into prompt
+[2m2026-04-16T22:28:39.153184Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-16T22:28:39.153214Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-16T22:28:39.153344Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 13 memories from store
+[2m2026-04-16T22:28:39.153363Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 13 memories (6005 chars) into prompt
+[2m2026-04-16T22:28:39.153461Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 13 closed) into prompt

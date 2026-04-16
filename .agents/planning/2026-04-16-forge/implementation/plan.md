@@ -40,7 +40,7 @@ Each checkbox corresponds 1:1 to a step below. Tick as you complete each step's 
 - [x] **Step 12:** Loop Engine — minimal Ralph loop, first end-to-end demo
 - [x] **Step 13:** Policy scanners — Security (gitleaks) + Placeholder + Gate
 - [x] **Step 14:** Escalation Manager — mailbox pair + `awaiting-human.md` / `answer.md` flow
-- [ ] **Step 15:** Notifier — 5-channel cascade + env-probe
+- [x] **Step 15:** Notifier — 5-channel cascade + env-probe
 - [ ] **Step 16:** Stuck Detector (hybrid scoring) + Completion Detector
 - [ ] **Step 17:** Context Manager + Brain primitives (Classify / Judge / Distill / Diagnose / Draft)
 - [ ] **Step 18:** Gemini + Kiro backend adapters

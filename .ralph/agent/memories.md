@@ -2,6 +2,14 @@
 
 ## Patterns
 
+### mem-1776378502-9119
+> internal/escalate package: Manager.Escalate() writes awaiting-human.md (AtomicWrite shim: renameio on Unix, natefinch/atomic on Windows), writes ESCALATION sentinel, displays banner, then blocks on fsnotify dir-watch (debounce 250ms + stability check) or 2s polling on network-FS. ParseAnswer: CRLF→LF, requires id:/answer:/--- fields; ID mismatch→answer.stale.md.<ts>. --auto-resolve accept-recommended waits 5s for non-mandatory. GateScannerEscalation() builds escalation from loop engine; answer dispatch: a=commit, s=unstage+continue, p/d=break.
+<!-- tags: escalate, loopengine, policy | created: 2026-04-16 -->
+
+### mem-1776378075-0202
+> internal/policy package: SecurityScanner (gitleaks v8 via isolated viper, DetectBytes on diff), PlaceholderScanner (11 regex patterns, 9 high-conf + 2 low-conf, diff-mode added-lines only, skips test files + forge:allow-todo + TODO(#N)), GateScanner (hardcoded tables for manifest/CI/secret-env/lockfile paths). Loop engine now stages-then-scans-then-commits (git add -A → diff --cached → policy scan → commit or unstage). gitleaks allowlists 'EXAMPLE'-ending keys via stopword regex.
+<!-- tags: policy, security, loopengine | created: 2026-04-16 -->
+
 ### mem-1776377616-5e0e
 > internal/loopengine package: Run() assembles prompt (task.md+plan.md+state.md), calls Backend.RunIteration, appends ledger.jsonl (NDJSON), commits via git CommitAll if dirty, enforces MaxIterations/MaxDuration cap, detects TASK_COMPLETE in FinalText/CompletionSentinel. LedgerEntry has run_id,iteration,started_at,finished_at,duration_sec,exit,files_changed,commit_sha,tokens,complete. Root cmd now runs plan phase → lock → loop instead of stub.
 <!-- tags: loopengine, cli | created: 2026-04-16 -->
