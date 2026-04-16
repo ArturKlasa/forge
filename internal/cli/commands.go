@@ -16,6 +16,7 @@ import (
 	"github.com/arturklasa/forge/internal/config"
 	forgegit "github.com/arturklasa/forge/internal/git"
 	forgelog "github.com/arturklasa/forge/internal/log"
+	"github.com/arturklasa/forge/internal/loopengine"
 	"github.com/arturklasa/forge/internal/planphase"
 	"github.com/arturklasa/forge/internal/router"
 	"github.com/arturklasa/forge/internal/state"
@@ -90,10 +91,24 @@ func newPlanCmd() *cobra.Command {
 			case planphase.ActionAbort:
 				return nil
 			default:
-				// ActionGo: plan phase accepted, loop engine would start here (step 12).
+				// ActionGo: plan phase accepted, start the loop.
 				fmt.Fprintf(out, "Plan accepted. Run ID: %s\n", res.RunDir.ID)
-				fmt.Fprintf(out, "(Loop engine starts in step 12)\n")
-				return nil
+				l, lockErr := forgelock.Acquire(state.NewManager(workDir).ForgeDir(), res.RunDir.ID)
+				if lockErr != nil {
+					return lockErr
+				}
+				defer l.Release()
+				be := claudebackend.New()
+				_, loopErr := loopengine.Run(cmd.Context(), loopengine.Options{
+					RunDir:        res.RunDir,
+					Backend:       be,
+					GitHelper:     forgegit.New(workDir),
+					StateManager:  state.NewManager(workDir),
+					MaxIterations: 100,
+					Path:          string(res.Path),
+					Output:        out,
+				})
+				return loopErr
 			}
 		},
 	}

@@ -100,7 +100,7 @@ func TestUnimplementedStubs(t *testing.T) {
 		{[]string{"clean"}, 24, false},
 		// doctor is partially implemented in step 6 (git checks)
 		// plan is implemented in step 10 — removed from stubs list
-		{[]string{"some task description"}, 12, true},
+		// "some task description" now runs the loop engine (step 12) — no longer a stub
 	}
 
 	for _, tc := range cases {

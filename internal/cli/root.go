@@ -3,8 +3,13 @@ package cli
 import (
 	"fmt"
 	"os"
+	"time"
 
+	claudebackend "github.com/arturklasa/forge/internal/backend/claude"
+	forgegit "github.com/arturklasa/forge/internal/git"
 	forgelog "github.com/arturklasa/forge/internal/log"
+	"github.com/arturklasa/forge/internal/loopengine"
+	"github.com/arturklasa/forge/internal/planphase"
 	"github.com/arturklasa/forge/internal/state"
 	forgelock "github.com/arturklasa/forge/internal/state/lock"
 	"github.com/arturklasa/forge/internal/version"
@@ -51,7 +56,10 @@ Use a subcommand:
 				return cmd.Help()
 			}
 
-			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			task := args[0]
+			pf := cmd.Root().PersistentFlags()
+
+			workDir, _ := pf.GetString("path")
 			if workDir == "" {
 				var err error
 				workDir, err = os.Getwd()
@@ -60,19 +68,57 @@ Use a subcommand:
 				}
 			}
 
+			yesFlag, _ := pf.GetBool("yes")
+			timeoutSec, _ := pf.GetInt("timeout")
+
 			mgr := state.NewManager(workDir)
 			if err := mgr.Init(); err != nil {
 				return fmt.Errorf("state init: %w", err)
 			}
 
-			runID := "task-stub"
-			l, err := forgelock.Acquire(mgr.ForgeDir(), runID)
+			gitHelper := forgegit.New(workDir)
+
+			// Run plan phase.
+			planResult, err := planphase.Run(cmd.Context(), planphase.Options{
+				Task:         task,
+				WorkDir:      workDir,
+				ForceYes:     yesFlag,
+				Output:       cmd.OutOrStdout(),
+				StateManager: mgr,
+				GitHelper:    gitHelper,
+			})
+			if err != nil {
+				return err
+			}
+
+			if planResult.Action != planphase.ActionGo {
+				return nil // aborted or chain (chain handled in step 23)
+			}
+
+			// Acquire lock before starting the loop.
+			l, err := forgelock.Acquire(mgr.ForgeDir(), planResult.RunDir.ID)
 			if err != nil {
 				return err
 			}
 			defer l.Release()
 
-			return fmt.Errorf("not implemented yet (scheduled for step 12)")
+			var maxDuration time.Duration
+			if timeoutSec > 0 {
+				maxDuration = time.Duration(timeoutSec) * time.Second
+			}
+
+			be := claudebackend.New()
+			_, err = loopengine.Run(cmd.Context(), loopengine.Options{
+				RunDir:        planResult.RunDir,
+				Backend:       be,
+				GitHelper:     gitHelper,
+				StateManager:  mgr,
+				MaxIterations: 100,
+				MaxDuration:   maxDuration,
+				Path:          string(planResult.Path),
+				Output:        cmd.OutOrStdout(),
+			})
+			return err
 		},
 	}
 

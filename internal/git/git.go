@@ -128,6 +128,15 @@ func (g *Git) Commit(ctx context.Context, message string, files []string) error 
 	return err
 }
 
+// CommitAll stages all changes (including untracked files) and creates a commit.
+func (g *Git) CommitAll(ctx context.Context, message string) error {
+	if _, err := g.run(ctx, "add", "-A"); err != nil {
+		return fmt.Errorf("git add -A: %w", err)
+	}
+	_, err := g.run(ctx, "commit", "-m", message)
+	return err
+}
+
 // ResetHard resets the working tree and index to sha.
 // Requires confirm.IHaveHumanConfirmation == true as a type-level safety gate.
 func (g *Git) ResetHard(ctx context.Context, sha string, confirm HumanConfirmation) error {
