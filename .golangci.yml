@@ -1,0 +1,35 @@
+run:
+  timeout: 5m
+  go: "1.23"
+
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - govet
+    - revive
+    - errcheck
+    - staticcheck
+
+linters-settings:
+  gofmt:
+    simplify: true
+  govet:
+    enable-all: true
+  revive:
+    rules:
+      - name: exported
+      - name: var-naming
+      - name: unused-parameter
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  staticcheck:
+    checks: ["all"]
+
+issues:
+  exclude-rules:
+    # Allow errcheck to pass on defer calls in tests.
+    - path: "_test.go"
+      linters:
+        - errcheck
