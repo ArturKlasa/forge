@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/arturklasa/forge/internal/backend"
+	"github.com/arturklasa/forge/internal/escalate"
 	forgegit "github.com/arturklasa/forge/internal/git"
 	"github.com/arturklasa/forge/internal/policy"
 	"github.com/arturklasa/forge/internal/state"
@@ -47,6 +48,10 @@ type Options struct {
 
 	// Clock overrides time.Now() for testing.
 	Clock func() time.Time
+
+	// EscalationManager handles human escalations (policy gates, etc.).
+	// If nil, hard stops break the loop without waiting for a human response.
+	EscalationManager *escalate.Manager
 }
 
 // Result summarises the completed loop.
@@ -149,11 +154,39 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 						return nil, fmt.Errorf("iter %d append placeholder ledger: %w", i, err)
 					}
 					if scan.HasHardStop() {
-						policyHardStop = true
 						reason := scan.HardStopReason()
-						fmt.Fprintf(opts.Output, "[%s] iter %d · ESCALATION — %s\n  Loop halted; run 'forge resume' or respond via .forge/current/answer.md\n",
+						fmt.Fprintf(opts.Output, "[%s] iter %d · ESCALATION — %s\n",
 							opts.Clock().Format("15:04:05"), i, reason)
-						_ = opts.GitHelper.UnstageAll(deadlineCtx)
+
+						if opts.EscalationManager != nil {
+							esc := escalate.GateScannerEscalation(
+								opts.EscalationManager.RunDir,
+								i, path, reason, opts.Clock,
+							)
+							ans, escErr := opts.EscalationManager.Escalate(deadlineCtx, esc)
+							if escErr != nil || ans.OptionKey == "d" || ans.OptionKey == "p" || ans.OptionKey == "abort-auto" {
+								policyHardStop = true
+								_ = opts.GitHelper.UnstageAll(deadlineCtx)
+							} else if ans.OptionKey == "s" {
+								// Revert: unstage and continue loop.
+								_ = opts.GitHelper.UnstageAll(deadlineCtx)
+								// policyHardStop stays false → loop continues
+							} else if ans.OptionKey == "a" {
+								// Apply: commit staged changes.
+								msg := fmt.Sprintf("forge(%s): iter %d (gate-approved)", path, i)
+								if commitErr := opts.GitHelper.CommitStaged(deadlineCtx, msg); commitErr == nil {
+									result.Commits++
+									sha, _, shaErr := opts.GitHelper.HEAD(deadlineCtx)
+									if shaErr == nil {
+										commitSHA = sha
+									}
+									changedFiles = diffPaths(string(diff))
+								}
+							}
+						} else {
+							policyHardStop = true
+							_ = opts.GitHelper.UnstageAll(deadlineCtx)
+						}
 					}
 				}
 
