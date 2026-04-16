@@ -19,6 +19,14 @@ import (
 	"github.com/arturklasa/forge/internal/state"
 )
 
+// oneShotPaths are the 4 read-only/no-loop modes that skip pre-gates and artifacts.
+var oneShotPaths = map[router.Path]bool{
+	router.PathReview:   true,
+	router.PathDocument: true,
+	router.PathExplain:  true,
+	router.PathResearch: true,
+}
+
 // Action describes the user's decision at the confirmation prompt.
 type Action string
 
@@ -108,6 +116,28 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	detectedPath := routerRes.Path
+
+	// ── 1b. One-shot fast path ───────────────────────────────────────────────
+	// One-shot modes (review/document/explain/research) skip pre-gates, research,
+	// and confirmation — they go directly to the one-shot engine.
+	if oneShotPaths[detectedPath] {
+		sm := opts.StateManager
+		if sm == nil {
+			sm = state.NewManager(opts.WorkDir)
+		}
+		if err := sm.Init(); err != nil {
+			return nil, fmt.Errorf("init state: %w", err)
+		}
+		runID := generateRunID(opts.Clock(), detectedPath, opts.Task)
+		rd, err := sm.CreateRun(runID)
+		if err != nil {
+			return nil, fmt.Errorf("create run: %w", err)
+		}
+		if err := sm.Transition(rd, state.MarkerRunning); err != nil {
+			return nil, fmt.Errorf("set running marker: %w", err)
+		}
+		return &Result{Action: ActionGo, RunDir: rd, Path: detectedPath}, nil
+	}
 
 	// ── 2. Pre-gates ────────────────────────────────────────────────────────
 	branch, err := runPreGates(ctx, opts, detectedPath)

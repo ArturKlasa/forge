@@ -9,6 +9,7 @@ import (
 	forgegit "github.com/arturklasa/forge/internal/git"
 	forgelog "github.com/arturklasa/forge/internal/log"
 	"github.com/arturklasa/forge/internal/loopengine"
+	"github.com/arturklasa/forge/internal/oneshot"
 	"github.com/arturklasa/forge/internal/planphase"
 	"github.com/arturklasa/forge/internal/state"
 	forgelock "github.com/arturklasa/forge/internal/state/lock"
@@ -95,6 +96,20 @@ Use a subcommand:
 				return nil // aborted or chain (chain handled in step 23)
 			}
 
+			be := claudebackend.New()
+
+			// One-shot paths skip the loop engine entirely.
+			if oneshot.IsOneShotPath(planResult.Path) {
+				_, err = oneshot.Run(cmd.Context(), oneshot.Options{
+					Task:    task,
+					Path:    planResult.Path,
+					RunDir:  planResult.RunDir,
+					Backend: be,
+					Output:  cmd.OutOrStdout(),
+				})
+				return err
+			}
+
 			// Acquire lock before starting the loop.
 			l, err := forgelock.Acquire(mgr.ForgeDir(), planResult.RunDir.ID)
 			if err != nil {
@@ -107,7 +122,6 @@ Use a subcommand:
 				maxDuration = time.Duration(timeoutSec) * time.Second
 			}
 
-			be := claudebackend.New()
 			_, err = loopengine.Run(cmd.Context(), loopengine.Options{
 				RunDir:        planResult.RunDir,
 				Backend:       be,

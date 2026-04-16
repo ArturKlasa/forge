@@ -20,6 +20,7 @@ import (
 	forgelog "github.com/arturklasa/forge/internal/log"
 	"github.com/arturklasa/forge/internal/loopengine"
 	"github.com/arturklasa/forge/internal/notify"
+	"github.com/arturklasa/forge/internal/oneshot"
 	"github.com/arturklasa/forge/internal/planphase"
 	"github.com/arturklasa/forge/internal/router"
 	"github.com/arturklasa/forge/internal/state"
@@ -94,14 +95,26 @@ func newPlanCmd() *cobra.Command {
 			case planphase.ActionAbort:
 				return nil
 			default:
-				// ActionGo: plan phase accepted, start the loop.
+				// ActionGo: plan phase accepted, dispatch to loop or one-shot engine.
 				fmt.Fprintf(out, "Plan accepted. Run ID: %s\n", res.RunDir.ID)
+				be := claudebackend.New()
+
+				if oneshot.IsOneShotPath(res.Path) {
+					_, oErr := oneshot.Run(cmd.Context(), oneshot.Options{
+						Task:    task,
+						Path:    res.Path,
+						RunDir:  res.RunDir,
+						Backend: be,
+						Output:  out,
+					})
+					return oErr
+				}
+
 				l, lockErr := forgelock.Acquire(state.NewManager(workDir).ForgeDir(), res.RunDir.ID)
 				if lockErr != nil {
 					return lockErr
 				}
 				defer l.Release()
-				be := claudebackend.New()
 				_, loopErr := loopengine.Run(cmd.Context(), loopengine.Options{
 					RunDir:        res.RunDir,
 					Backend:       be,
