@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/arturklasa/forge/internal/config"
 	forgelog "github.com/arturklasa/forge/internal/log"
 	"github.com/arturklasa/forge/internal/state"
+	forgelock "github.com/arturklasa/forge/internal/state/lock"
 	"github.com/spf13/cobra"
 )
 
@@ -127,7 +130,47 @@ func newTestUtilityCmd() *cobra.Command {
 			return nil
 		},
 	}
+	holdLock := &cobra.Command{
+		Use:   "hold-lock [run-id]",
+		Short: "Acquire the run lock and hold it until SIGINT/SIGTERM (for demo/testing)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			if workDir == "" {
+				var err error
+				workDir, err = os.Getwd()
+				if err != nil {
+					return err
+				}
+			}
+
+			runID := fmt.Sprintf("demo-%s", time.Now().UTC().Format("2006-01-02-150405"))
+			if len(args) == 1 {
+				runID = args[0]
+			}
+
+			mgr := state.NewManager(workDir)
+			if err := mgr.Init(); err != nil {
+				return fmt.Errorf("state init: %w", err)
+			}
+
+			l, err := forgelock.Acquire(mgr.ForgeDir(), runID)
+			if err != nil {
+				return err
+			}
+			defer l.Release()
+
+			fmt.Fprintf(cmd.OutOrStdout(), "(running... lock held for run %s; press Ctrl-C to release)\n", runID)
+
+			ch := make(chan os.Signal, 1)
+			signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+			<-ch
+			fmt.Fprintln(cmd.OutOrStdout(), "\nReleasing lock.")
+			return nil
+		},
+	}
 	cmd.AddCommand(createTestRun)
+	cmd.AddCommand(holdLock)
 	return cmd
 }
 

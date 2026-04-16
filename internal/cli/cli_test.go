@@ -86,24 +86,31 @@ func TestVersion(t *testing.T) {
 // TestUnimplementedStubs verifies every remaining stub returns a non-zero exit
 // and the "not implemented yet" message with the expected step reference.
 func TestUnimplementedStubs(t *testing.T) {
-	cases := []struct {
-		args []string
-		step int
-	}{
-		{[]string{"stop"}, 24},
-		{[]string{"resume"}, 24},
-		{[]string{"history"}, 24},
-		{[]string{"show", "fake-run-id"}, 24},
-		{[]string{"clean"}, 24},
-		{[]string{"doctor"}, 24},
-		{[]string{"plan", "do something"}, 11},
-		{[]string{"some task description"}, 12},
+	type testCase struct {
+		args  []string
+		step  int
+		inDir bool // run with a temp workdir
+	}
+	cases := []testCase{
+		{[]string{"stop"}, 24, false},
+		{[]string{"resume"}, 24, false},
+		{[]string{"history"}, 24, false},
+		{[]string{"show", "fake-run-id"}, 24, false},
+		{[]string{"clean"}, 24, false},
+		{[]string{"doctor"}, 24, false},
+		{[]string{"plan", "do something"}, 11, false},
+		{[]string{"some task description"}, 12, true},
 	}
 
 	for _, tc := range cases {
 		tc := tc
 		t.Run(strings.Join(tc.args, "_"), func(t *testing.T) {
-			_, _, err := execute(tc.args...)
+			var err error
+			if tc.inDir {
+				_, _, err = executeInDir(t.TempDir(), tc.args...)
+			} else {
+				_, _, err = execute(tc.args...)
+			}
 			if err == nil {
 				t.Fatal("expected an error, got nil")
 			}

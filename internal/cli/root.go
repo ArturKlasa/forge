@@ -2,8 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	forgelog "github.com/arturklasa/forge/internal/log"
+	"github.com/arturklasa/forge/internal/state"
+	forgelock "github.com/arturklasa/forge/internal/state/lock"
 	"github.com/arturklasa/forge/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -47,6 +50,28 @@ Use a subcommand:
 			if len(args) == 0 {
 				return cmd.Help()
 			}
+
+			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			if workDir == "" {
+				var err error
+				workDir, err = os.Getwd()
+				if err != nil {
+					return err
+				}
+			}
+
+			mgr := state.NewManager(workDir)
+			if err := mgr.Init(); err != nil {
+				return fmt.Errorf("state init: %w", err)
+			}
+
+			runID := "task-stub"
+			l, err := forgelock.Acquire(mgr.ForgeDir(), runID)
+			if err != nil {
+				return err
+			}
+			defer l.Release()
+
 			return fmt.Errorf("not implemented yet (scheduled for step 12)")
 		},
 	}
