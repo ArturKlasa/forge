@@ -3,11 +3,18 @@ package cli_test
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	forgelog "github.com/arturklasa/forge/internal/log"
 	"github.com/arturklasa/forge/internal/cli"
 )
+
+func init() {
+	forgelog.Init(forgelog.Config{})
+}
 
 // execute runs the forge command with the given args and returns stdout, stderr, and any error.
 func execute(args ...string) (stdout string, stderr string, err error) {
@@ -22,6 +29,12 @@ func execute(args ...string) (stdout string, stderr string, err error) {
 
 	err = root.Execute()
 	return outBuf.String(), errBuf.String(), err
+}
+
+// executeInDir runs the forge command with --path set to a temp directory.
+func executeInDir(dir string, args ...string) (stdout string, stderr string, err error) {
+	allArgs := append([]string{"--path", dir}, args...)
+	return execute(allArgs...)
 }
 
 // TestHelpCommands verifies that --help works for every (sub)command and exits 0.
@@ -70,8 +83,8 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-// TestUnimplementedStubs verifies every stub returns a non-zero exit and the
-// "not implemented yet" message.
+// TestUnimplementedStubs verifies every remaining stub returns a non-zero exit
+// and the "not implemented yet" message with the expected step reference.
 func TestUnimplementedStubs(t *testing.T) {
 	cases := []struct {
 		args []string
@@ -83,11 +96,6 @@ func TestUnimplementedStubs(t *testing.T) {
 		{[]string{"history"}, 24},
 		{[]string{"show", "fake-run-id"}, 24},
 		{[]string{"clean"}, 24},
-		{[]string{"backend", "set", "claude"}, 3},
-		{[]string{"config", "get", "brain"}, 3},
-		{[]string{"config", "set", "brain", "claude"}, 3},
-		{[]string{"config", "unset", "brain"}, 3},
-		{[]string{"config", "edit"}, 3},
 		{[]string{"doctor"}, 24},
 		{[]string{"plan", "do something"}, 11},
 		{[]string{"some task description"}, 12},
@@ -109,4 +117,89 @@ func TestUnimplementedStubs(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestConfigCommands verifies that config get/set/unset/edit commands work correctly.
+func TestConfigCommands(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	repoDir := t.TempDir()
+
+	// forge config set backend.default gemini
+	_, _, err := executeInDir(repoDir, "config", "set", "backend.default", "gemini")
+	if err != nil {
+		t.Fatalf("config set: %v", err)
+	}
+
+	// forge config get backend.default → "gemini"
+	out, _, err := executeInDir(repoDir, "config", "get", "backend.default")
+	if err != nil {
+		t.Fatalf("config get: %v", err)
+	}
+	if !strings.Contains(out, "gemini") {
+		t.Errorf("config get: expected 'gemini', got %q", out)
+	}
+
+	// forge config (no subcommand) → merged YAML containing backend
+	out, _, err = executeInDir(repoDir, "config")
+	if err != nil {
+		t.Fatalf("config: %v", err)
+	}
+	if !strings.Contains(out, "backend") {
+		t.Errorf("config merged output should contain 'backend', got: %q", out)
+	}
+
+	// forge config unset backend.default → default (claude) should win again
+	_, _, err = executeInDir(repoDir, "config", "unset", "backend.default")
+	if err != nil {
+		t.Fatalf("config unset: %v", err)
+	}
+	out, _, err = executeInDir(repoDir, "config", "get", "backend.default")
+	if err != nil {
+		t.Fatalf("config get after unset: %v", err)
+	}
+	if !strings.Contains(out, "claude") {
+		t.Errorf("after unset, expected default 'claude', got %q", out)
+	}
+
+	// forge config edit with EDITOR=true (no-op binary)
+	t.Setenv("EDITOR", "true")
+	editorPath := findTrueBinary(t)
+	if editorPath != "" {
+		t.Setenv("EDITOR", editorPath)
+		_, _, err = executeInDir(repoDir, "config", "edit")
+		if err != nil {
+			t.Errorf("config edit with EDITOR=true: %v", err)
+		}
+	}
+
+	// forge backend set claude
+	_, _, err = executeInDir(repoDir, "backend", "set", "claude")
+	if err != nil {
+		t.Fatalf("backend set claude: %v", err)
+	}
+
+	// forge backend set invalid → error
+	_, _, err = executeInDir(repoDir, "backend", "set", "invalid")
+	if err == nil {
+		t.Error("backend set invalid: expected error, got nil")
+	}
+}
+
+// findTrueBinary returns the path to the `true` binary, or "" if not found.
+func findTrueBinary(t *testing.T) string {
+	t.Helper()
+	candidates := []string{"/bin/true", "/usr/bin/true"}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	// Write a small shell script as a fallback.
+	tmp := filepath.Join(t.TempDir(), "true")
+	if err := os.WriteFile(tmp, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		return ""
+	}
+	return tmp
 }

@@ -86,6 +86,18 @@ func Init(cfg Config) {
 	slog.SetDefault(global.sl)
 }
 
+// InitWithHandler initialises the global logger with a custom slog.Handler.
+// Intended for tests that need to capture log output.
+func InitWithHandler(h slog.Handler) {
+	global = &Logger{
+		sl:          slog.New(h),
+		cfg:         Config{Out: os.Stderr, UserOut: os.Stdout},
+		renderer:    lipgloss.NewRenderer(os.Stdout),
+		interactive: false,
+	}
+	slog.SetDefault(global.sl)
+}
+
 // G returns the global Logger. Panics if Init has not been called.
 func G() *Logger {
 	if global == nil {

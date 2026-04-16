@@ -28,7 +28,7 @@ Each checkbox corresponds 1:1 to a step below. Tick as you complete each step's 
 
 - [x] **Step 1:** Project scaffolding + CLI skeleton
 - [x] **Step 2:** Logger (slog + lipgloss) + terminal output modes
-- [ ] **Step 3:** Config system (koanf) with layered precedence
+- [x] **Step 3:** Config system (koanf) with layered precedence
 - [ ] **Step 4:** State manager — run directories + lifecycle markers
 - [ ] **Step 5:** Single-run lock with PID + start-time tuple
 - [ ] **Step 6:** Git helper (shell-out wrapper)

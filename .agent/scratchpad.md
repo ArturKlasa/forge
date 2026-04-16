@@ -40,3 +40,21 @@
 **Demo verified:**
 - `forge --json status` → valid NDJSON to stdout
 - `NO_COLOR=1 forge --help` → no ANSI codes
+
+## 2026-04-16 — Iteration 3
+
+### Completed: Step 3 — Config system (koanf) with layered precedence
+
+**What was done:**
+- Created `internal/config/config.go`: full Config schema (all §5.2 fields with koanf+yaml tags), Manager type, Load() with 4-layer precedence (defaults → global → repo → env), goyamlParser using goccy/go-yaml, mapProvider using koanf/maps Unflatten
+- Created `internal/config/write.go`: SetKey/UnsetKey for writing nested YAML key updates to target files
+- Added InitWithHandler to `internal/log` for test log capture
+- Wired `config`, `config get/set/unset/edit` commands in commands.go - fully functional
+- Wired `backend set` command using config system
+- 7 config tests pass + CLI tests updated (removed now-implemented commands from stubs test, added TestConfigCommands)
+- CLI loads config via --path flag for test isolation
+
+**Demo verified:**
+- `forge config set backend.default claude` → sets key in repo config
+- `forge config get backend.default` → `claude`
+- `forge config` → prints full merged YAML with all defaults
