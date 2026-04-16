@@ -1,0 +1,79 @@
+# Ralph Orchestrator — Forge v1 Implementation
+#
+# This config drives a Ralph loop that executes the 25-step implementation
+# plan at .agents/planning/2026-04-16-forge/implementation/plan.md.
+#
+# Each iteration: re-read plan.md checklist → work the first unchecked step
+# (guided by its Objective / Tests / Demo / Integration sections) → commit →
+# tick the box. Loop exits when all 25 boxes are checked AND the
+# post-implementation sanity pass at the bottom of plan.md passes, at which
+# point the agent outputs LOOP_COMPLETE.
+#
+# Traditional (no-hats) mode. Plan is already decomposed per-step, so a
+# single Builder persona is sufficient. Upgrade to hat-based mode later if
+# you want reviewer/critic separation.
+#
+# Docs: https://github.com/mikeyobrien/ralph-orchestrator
+# Human-editable spec: .agents/planning/2026-04-16-forge/design/detailed-design.md
+
+cli:
+  backend: "claude"
+
+event_loop:
+  prompt_file: "PROMPT.md"
+  completion_promise: "LOOP_COMPLETE"
+
+  # 25 steps × ~15–20 iterations/step is the realistic upper band.
+  # 500 keeps substantial headroom without being reckless; tune down if
+  # you prefer to stop and re-inspect more often.
+  max_iterations: 500
+
+  # 24 hours wall-clock. Stop any time with `q` in the TUI; resume via
+  # `ralph run --continue`. Bumping this is safe — each iteration commits.
+  max_runtime_seconds: 86400
+
+  # 1h idle (no output) → stop; assume something hung.
+  idle_timeout_secs: 3600
+
+  # Git checkpoint every 5 iterations (Ralph-managed).
+  checkpoint_interval: 5
+
+core:
+  # Ralph's own state dir; separate from Forge's runtime state dir (.forge/).
+  scratchpad: ".agent/scratchpad.md"
+
+  # The planning directory. Ralph treats this as informational; the actual
+  # load path for specs is driven from PROMPT.md.
+  specs_dir: ".agents/planning/2026-04-16-forge/"
+
+  # Global rules injected into every iteration's prompt. Keep concise —
+  # these compound with PROMPT.md on every call.
+  guardrails:
+    - "Source of truth for v1 behavior is .agents/planning/2026-04-16-forge/design/detailed-design.md. Consult it before every architectural decision."
+    - "Execute steps from .agents/planning/2026-04-16-forge/implementation/plan.md strictly in order. Do NOT skip or reorder."
+    - "A step is done only when: (a) its tests pass, (b) its Demo works as described, (c) its checklist box `- [ ]` is changed to `- [x]` in plan.md."
+    - "Write tests before or alongside the implementation code — never bolted on after."
+    - "Do NOT modify files under .agents/planning/ except ticking step checkboxes in plan.md. If the design looks wrong, surface it in a commit message or scratchpad note; do not silently deviate."
+    - "Go 1.22+. Use the libraries recommended in research/go-library-survey.md — do not substitute without a documented reason."
+    - "One commit per step. Commit message format: `step N: <short title>`. Do not batch steps."
+    - "When blocked, write a clear blocker note to .agent/scratchpad.md with what was tried and what's needed; continue with the next iteration — the loop will re-attempt with fresh context."
+    - "Output the exact string LOOP_COMPLETE on its own line only when ALL 25 checkboxes are ticked AND the post-implementation sanity pass at the bottom of plan.md passes."
+
+memories:
+  enabled: true
+  inject: "auto"
+  budget: 2000
+
+tasks:
+  enabled: true
+
+features:
+  # Keep parallel worktree loops disabled for the implementation pass.
+  # Forge's own design is single-run-per-repo; let's not introduce
+  # concurrency during bootstrap.
+  parallel: false
+
+  # Run preflight checks on startup (git / backend / paths / tools).
+  preflight:
+    enabled: true
+    strict: false
