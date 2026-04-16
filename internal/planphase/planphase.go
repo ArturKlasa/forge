@@ -42,8 +42,11 @@ type Result struct {
 	RunDir   *state.RunDir
 	Path     router.Path
 	Branch   string
-	ChainKey string      // set when Action == ActionChain
+	ChainKey string       // set when Action == ActionChain
 	Chain    []router.Path // set when Action == ActionChain
+	// DepGateInverted is true for Upgrade mode — dep-manifest changes are expected,
+	// not treated as hard-stop gate hits.
+	DepGateInverted bool
 }
 
 // TermReader abstracts single-keystroke reading for testability.
@@ -187,6 +190,17 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		}
 	}
 
+	// ── 6b. Upgrade version confirmation gate ────────────────────────────────
+	if detectedPath == router.PathUpgrade {
+		aborted, err := runUpgradeGate(ctx, opts, rd, sm, researchResult)
+		if err != nil {
+			return nil, err
+		}
+		if aborted {
+			return &Result{Action: ActionAbort, RunDir: rd, Path: detectedPath, Branch: branch}, nil
+		}
+	}
+
 	// ── 7. Confirmation UI ──────────────────────────────────────────────────
 	planItems, err := parsePlanItems(filepath.Join(rd.Path, "plan.md"))
 	if err != nil {
@@ -201,7 +215,13 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 			if err := sm.Transition(rd, state.MarkerRunning); err != nil {
 				return nil, err
 			}
-			return &Result{Action: ActionGo, RunDir: rd, Path: detectedPath, Branch: branch}, nil
+			return &Result{
+				Action:          ActionGo,
+				RunDir:          rd,
+				Path:            detectedPath,
+				Branch:          branch,
+				DepGateInverted: detectedPath == router.PathUpgrade,
+			}, nil
 		}
 
 		key, err := readKey(opts)
@@ -215,7 +235,13 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 			if err := sm.Transition(rd, state.MarkerRunning); err != nil {
 				return nil, err
 			}
-			return &Result{Action: ActionGo, RunDir: rd, Path: detectedPath, Branch: branch}, nil
+			return &Result{
+				Action:          ActionGo,
+				RunDir:          rd,
+				Path:            detectedPath,
+				Branch:          branch,
+				DepGateInverted: detectedPath == router.PathUpgrade,
+			}, nil
 
 		case 'n', 'N':
 			fmt.Fprintln(opts.Output, "")
@@ -317,6 +343,53 @@ func runInvariantGate(ctx context.Context, opts Options, rd *state.RunDir, sm *s
 			fmt.Fprintln(opts.Output, "")
 			fmt.Fprintln(opts.Output, string(data))
 			fmt.Fprint(opts.Output, "[y] confirm invariants  [e] edit invariants  [n] abort\n\n> ")
+		}
+	}
+}
+
+// runUpgradeGate renders the Upgrade version confirmation gate.
+// Returns (true, nil) when the user declines; (false, nil) when confirmed.
+func runUpgradeGate(_ context.Context, opts Options, rd *state.RunDir, sm *state.Manager, res *researchOutput) (aborted bool, err error) {
+	if res == nil {
+		return false, nil
+	}
+
+	fmt.Fprintln(opts.Output, "")
+	fmt.Fprintln(opts.Output, "═══ Upgrade Confirmation ═══════════════════════════════════════")
+	fmt.Fprintf(opts.Output, "Upgrading:      %s → %s\n", res.UpgradeSourceVersion, res.UpgradeTargetVersion)
+	if res.UpgradeBreakingCount > 0 {
+		fmt.Fprintf(opts.Output, "Breaking changes: %d documented\n", res.UpgradeBreakingCount)
+	}
+	if len(res.UpgradeManifests) > 0 {
+		fmt.Fprintf(opts.Output, "Expected manifest changes: %s\n", strings.Join(res.UpgradeManifests, ", "))
+	}
+	fmt.Fprintln(opts.Output, "(Dep-manifest gate is inverted for this run — manifest changes are expected.)")
+	fmt.Fprintln(opts.Output, "")
+
+	if opts.ForceYes {
+		fmt.Fprintln(opts.Output, "Auto-confirming upgrade (--yes).")
+		// Write the upgrade-target.md to record locked versions.
+		return false, nil
+	}
+
+	fmt.Fprint(opts.Output, "[y] confirm  [n] abort\n\n> ")
+	for {
+		key, kErr := readKey(opts)
+		if kErr != nil {
+			return false, fmt.Errorf("read upgrade gate key: %w", kErr)
+		}
+		switch key {
+		case 'y', 'Y':
+			fmt.Fprintln(opts.Output, "")
+			fmt.Fprintln(opts.Output, "Upgrade confirmed.")
+			return false, nil
+		case 'n', 'N':
+			fmt.Fprintln(opts.Output, "")
+			fmt.Fprintln(opts.Output, "Aborted at upgrade confirmation gate.")
+			if tErr := sm.Transition(rd, state.MarkerAborted); tErr != nil {
+				return true, tErr
+			}
+			return true, nil
 		}
 	}
 }

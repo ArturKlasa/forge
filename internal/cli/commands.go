@@ -116,13 +116,14 @@ func newPlanCmd() *cobra.Command {
 				}
 				defer l.Release()
 				_, loopErr := loopengine.Run(cmd.Context(), loopengine.Options{
-					RunDir:        res.RunDir,
-					Backend:       be,
-					GitHelper:     forgegit.New(workDir),
-					StateManager:  state.NewManager(workDir),
-					MaxIterations: 100,
-					Path:          string(res.Path),
-					Output:        out,
+					RunDir:          res.RunDir,
+					Backend:         be,
+					GitHelper:       forgegit.New(workDir),
+					StateManager:    state.NewManager(workDir),
+					MaxIterations:   100,
+					Path:            string(res.Path),
+					Output:          out,
+					DepGateInverted: res.DepGateInverted,
 				})
 				return loopErr
 			}

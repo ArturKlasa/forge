@@ -104,8 +104,30 @@ func writePathArtifact(task string, path router.Path, branch string, res *resear
 		sb.WriteString(fmt.Sprintf("\n---\n_created: %s_\n", now))
 		return writeFile(dir, "invariants.md", sb.String())
 
+	case router.PathUpgrade:
+		// upgrade-scope.md — target version, breaking changes, affected files.
+		var sb strings.Builder
+		sb.WriteString("# Upgrade Scope\n\n")
+		sb.WriteString(fmt.Sprintf("## Task\n%s\n\n", task))
+		sb.WriteString(fmt.Sprintf("## Source Version\n%s\n\n", res.UpgradeSourceVersion))
+		sb.WriteString(fmt.Sprintf("## Target Version\n%s\n\n", res.UpgradeTargetVersion))
+		sb.WriteString(fmt.Sprintf("## Breaking Changes\n%d documented\n\n", res.UpgradeBreakingCount))
+		sb.WriteString("## Expected Manifest Changes\n")
+		for _, m := range res.UpgradeManifests {
+			sb.WriteString(fmt.Sprintf("- %s\n", m))
+		}
+		sb.WriteString(fmt.Sprintf("\n## Research Summary\n%s\n\n", res.DomainSummary))
+		sb.WriteString(fmt.Sprintf("---\n_created: %s_\n", now))
+		if err := writeFile(dir, "upgrade-scope.md", sb.String()); err != nil {
+			return err
+		}
+		// upgrade-target.md — locked source/target versions.
+		targetContent := fmt.Sprintf("# Upgrade Target\n\nsource: %s\ntarget: %s\n\n---\n_created: %s_\n",
+			res.UpgradeSourceVersion, res.UpgradeTargetVersion, now)
+		return writeFile(dir, "upgrade-target.md", targetContent)
+
 	default:
-		// Other paths (Upgrade, Test, one-shot) handled in later steps.
+		// Other paths (Test, one-shot) handled in later steps.
 		return nil
 	}
 }

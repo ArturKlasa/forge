@@ -64,6 +64,10 @@ type Options struct {
 	// ContextBudgetTokens is the token budget for prompt assembly.
 	// 0 means use the default (100k tokens).
 	ContextBudgetTokens int
+
+	// DepGateInverted disables hard-stop escalation for dependency-manifest changes.
+	// Set true for Upgrade mode where dep-manifest modifications are expected.
+	DepGateInverted bool
 }
 
 // Result summarises the completed loop.
@@ -182,6 +186,10 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 					newHighConfPlaceholders = scan.HighConfidencePlaceholderCount()
 					if err := policy.AppendPlaceholderLedger(runDir, scan.PlaceholderHits, i, "active"); err != nil {
 						return nil, fmt.Errorf("iter %d append placeholder ledger: %w", i, err)
+					}
+					// In Upgrade mode, dep-manifest hits are expected — log them but don't escalate.
+					if opts.DepGateInverted {
+						scan = filterDepGateHits(scan)
 					}
 					if scan.HasHardStop() {
 						reason := scan.HardStopReason()
@@ -338,9 +346,38 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 
 	if result.Complete {
 		fmt.Fprintf(opts.Output, "DONE — %d iterations, %d commits\n", result.Iterations, result.Commits)
+		// Chain-hook suggestion for paths that commonly chain to other modes.
+		printChainHookSuggestion(opts.Output, path, opts.DepGateInverted)
 	}
 
 	return result, nil
+}
+
+// filterDepGateHits returns a copy of the ScanResult with dependency-manifest GateHits removed.
+// Used in Upgrade mode where dep-manifest changes are expected.
+func filterDepGateHits(scan *policy.ScanResult) *policy.ScanResult {
+	filtered := &policy.ScanResult{
+		SecretHits:      scan.SecretHits,
+		PlaceholderHits: scan.PlaceholderHits,
+	}
+	for _, g := range scan.GateHits {
+		if g.Class != policy.GateClassDependency && g.Class != policy.GateClassLockfile && g.Class != policy.GateClassLockfileOnly {
+			filtered.GateHits = append(filtered.GateHits, g)
+		}
+	}
+	return filtered
+}
+
+// printChainHookSuggestion prints a suggested next chain command after completion.
+func printChainHookSuggestion(w io.Writer, path string, depGateInverted bool) {
+	switch path {
+	case "upgrade":
+		fmt.Fprintln(w, "Suggested next: forge --chain upgrade:fix  (apply regression fixes)")
+		fmt.Fprintln(w, "             or forge --chain upgrade:test (add test coverage)")
+	case "review":
+		fmt.Fprintln(w, "Suggested next: forge --chain review:fix   (fix findings)")
+	}
+	_ = depGateInverted
 }
 
 // handleStuckTier performs the tier-specific action. Returns (acted, shouldBreak, err).

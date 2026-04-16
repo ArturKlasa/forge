@@ -46,7 +46,7 @@ Each checkbox corresponds 1:1 to a step below. Tick as you complete each step's 
 - [x] **Step 18:** Gemini + Kiro backend adapters
 - [x] **Step 19:** Add, Fix, Refactor paths (brownfield loop-mode variants)
 - [x] **Step 20:** One-shot modes — Review, Document, Explain, Research
-- [ ] **Step 21:** Upgrade mode (dep-gate-inverted loop)
+- [x] **Step 21:** Upgrade mode (dep-gate-inverted loop)
 - [ ] **Step 22:** Test mode (scope-restricted loop with production-touch escalation)
 - [ ] **Step 23:** Composite chaining — stage lifecycle + inter-stage contracts
 - [ ] **Step 24:** First-run onboarding + `forge doctor` + remaining CLI commands

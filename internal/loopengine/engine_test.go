@@ -542,6 +542,107 @@ func TestStuckDetectorExampleC(t *testing.T) {
 	}
 }
 
+// TestDepGateInverted verifies that dep-manifest changes do NOT halt the loop when
+// DepGateInverted=true (Upgrade mode), and that non-dep gates still halt.
+func TestDepGateInverted(t *testing.T) {
+	skipIfNoExec(t)
+	workDir, git := initGitRepo(t)
+	rd := makeRunDir(t, workDir)
+
+	iteration := 0
+	// Iter 1: modify package.json (dep manifest — should NOT escalate in Upgrade mode).
+	// Iter 2: complete.
+	mockBE := &iterCountBackend{
+		responses: []string{"iter 1 ok", "TASK_COMPLETE"},
+		iteration: &iteration,
+		onRun: func(i int) {
+			if i == 1 {
+				_ = os.WriteFile(filepath.Join(workDir, "package.json"), []byte(`{"name":"app","version":"14.0.0"}`), 0o644)
+			}
+		},
+	}
+
+	pscanner, err := policy.NewScanner("", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("policy.NewScanner: %v", err)
+	}
+
+	var out strings.Builder
+	res, err := Run(context.Background(), Options{
+		RunDir:          rd,
+		Backend:         mockBE,
+		GitHelper:       git,
+		StateManager:    state.NewManager(workDir),
+		MaxIterations:   10,
+		Path:            "upgrade",
+		Output:          &out,
+		PolicyScanner:   pscanner,
+		DepGateInverted: true,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Loop should complete (not halt on dep manifest).
+	if !res.Complete {
+		t.Errorf("Complete = false, want true — dep gate should be suppressed in Upgrade mode")
+	}
+	if strings.Contains(out.String(), "ESCALATION") {
+		t.Errorf("unexpected ESCALATION in Upgrade mode output:\n%s", out.String())
+	}
+}
+
+// TestDepGateInverted_NonDepGatesStillFire verifies that non-dep mandatory gates
+// (e.g. CI pipeline files) still halt even in Upgrade mode (DepGateInverted=true).
+func TestDepGateInverted_NonDepGatesStillFire(t *testing.T) {
+	skipIfNoExec(t)
+	workDir, git := initGitRepo(t)
+	rd := makeRunDir(t, workDir)
+
+	iteration := 0
+	mockBE := &iterCountBackend{
+		responses: []string{"iter 1 ok", "iter 2 ok"},
+		iteration: &iteration,
+		onRun: func(i int) {
+			if i == 1 {
+				// Modify package.json (dep — OK in Upgrade mode) AND .github/workflows/ci.yml (CI — still gates).
+				_ = os.MkdirAll(filepath.Join(workDir, ".github", "workflows"), 0o755)
+				_ = os.WriteFile(filepath.Join(workDir, "package.json"), []byte(`{"version":"14"}`), 0o644)
+				_ = os.WriteFile(filepath.Join(workDir, ".github", "workflows", "ci.yml"), []byte("name: CI"), 0o644)
+			}
+		},
+	}
+
+	pscanner, err := policy.NewScanner("", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("policy.NewScanner: %v", err)
+	}
+
+	var out strings.Builder
+	res, err := Run(context.Background(), Options{
+		RunDir:          rd,
+		Backend:         mockBE,
+		GitHelper:       git,
+		StateManager:    state.NewManager(workDir),
+		MaxIterations:   10,
+		Path:            "upgrade",
+		Output:          &out,
+		PolicyScanner:   pscanner,
+		DepGateInverted: true,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Loop should halt due to CI gate (not dep gate).
+	if res.Complete {
+		t.Error("Complete = true, want false — CI gate should halt even in Upgrade mode")
+	}
+	if !strings.Contains(out.String(), "ESCALATION") {
+		t.Errorf("expected ESCALATION for CI gate hit:\n%s", out.String())
+	}
+}
+
 // iterCountBackend is a test Backend that cycles through canned responses.
 type iterCountBackend struct {
 	responses []string

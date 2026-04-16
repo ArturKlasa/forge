@@ -16,6 +16,12 @@ type researchOutput struct {
 	SimilarPatterns string
 	PlanItems       []string
 	Invariants      []string // Refactor path only
+
+	// Upgrade path fields.
+	UpgradeSourceVersion string
+	UpgradeTargetVersion string
+	UpgradeBreakingCount int
+	UpgradeManifests     []string
 }
 
 // runResearch executes 1–3 research subagents appropriate for the given path.
@@ -38,6 +44,8 @@ func runResearch(ctx context.Context, opts Options, path router.Path, rd *state.
 		return researchFix(ctx, opts, b)
 	case router.PathRefactor:
 		return researchRefactor(ctx, opts, b)
+	case router.PathUpgrade:
+		return researchUpgrade(ctx, opts, b)
 	default:
 		fmt.Fprintln(opts.Output, "done (stub)")
 		return stubResearch(opts.Task), nil
@@ -268,6 +276,98 @@ Format: numbered list only.
 		out.Invariants = []string{"All existing public APIs remain unchanged", "All existing tests continue to pass"}
 	}
 	return out, nil
+}
+
+// researchUpgrade runs 2–4 Upgrade-path researchers: release notes + migration guides + affected imports.
+func researchUpgrade(ctx context.Context, opts Options, b backend.Backend) (*researchOutput, error) {
+	task := opts.Task
+
+	// Researcher 1: identify source/target versions and dep manifests.
+	scopePrompt := backend.Prompt{
+		Body: fmt.Sprintf(`You are an upgrade scope researcher.
+Upgrade task: %s
+
+Respond with exactly these fields (one per line):
+source_version=<detected or unknown>
+target_version=<detected or unknown>
+breaking_changes=<estimated count or 0>
+manifests=<comma-separated list of dep manifest files expected to change, e.g. package.json,package-lock.json>
+
+Only output the four key=value lines.`, task),
+	}
+	scopeRes, err := b.RunIteration(ctx, scopePrompt, backend.IterationOpts{MaxTurns: 1})
+	if err != nil {
+		return nil, fmt.Errorf("upgrade scope research: %w", err)
+	}
+
+	// Researcher 2: migration guide + implementation plan.
+	planPrompt := backend.Prompt{
+		Body: fmt.Sprintf(`You are an upgrade migration planner.
+Upgrade task: %s
+
+Write a numbered migration plan (3–6 steps) covering:
+1. Update dependency version
+2. Apply breaking changes
+3. Run tests and fix regressions
+
+Format: numbered list only.
+1. First step
+2. Second step`, task),
+	}
+	planRes, err := b.RunIteration(ctx, planPrompt, backend.IterationOpts{MaxTurns: 1})
+	if err != nil {
+		return nil, fmt.Errorf("upgrade migration plan: %w", err)
+	}
+
+	fmt.Fprintln(opts.Output, "done")
+	fmt.Fprint(opts.Output, "Drafting plan... done\n")
+
+	// Parse scope fields.
+	sourceVer, targetVer, breakingCount, manifests := parseUpgradeScopeFields(scopeRes.FinalText)
+
+	out := &researchOutput{
+		DomainSummary:        scopeRes.FinalText,
+		SimilarPatterns:      planRes.FinalText,
+		PlanItems:            extractPlanItems(planRes.FinalText),
+		UpgradeSourceVersion: sourceVer,
+		UpgradeTargetVersion: targetVer,
+		UpgradeBreakingCount: breakingCount,
+		UpgradeManifests:     manifests,
+	}
+	if len(out.PlanItems) == 0 {
+		out.PlanItems = stubResearch(task).PlanItems
+	}
+	if len(out.UpgradeManifests) == 0 {
+		out.UpgradeManifests = []string{"package.json"}
+	}
+	return out, nil
+}
+
+// parseUpgradeScopeFields extracts key=value fields from the scope researcher response.
+func parseUpgradeScopeFields(text string) (sourceVer, targetVer string, breakingCount int, manifests []string) {
+	sourceVer = "unknown"
+	targetVer = "unknown"
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "source_version="):
+			sourceVer = strings.TrimPrefix(line, "source_version=")
+		case strings.HasPrefix(line, "target_version="):
+			targetVer = strings.TrimPrefix(line, "target_version=")
+		case strings.HasPrefix(line, "breaking_changes="):
+			val := strings.TrimPrefix(line, "breaking_changes=")
+			fmt.Sscanf(val, "%d", &breakingCount)
+		case strings.HasPrefix(line, "manifests="):
+			val := strings.TrimPrefix(line, "manifests=")
+			for _, m := range strings.Split(val, ",") {
+				m = strings.TrimSpace(m)
+				if m != "" {
+					manifests = append(manifests, m)
+				}
+			}
+		}
+	}
+	return
 }
 
 // extractBulletItems parses "- item" lines from text.

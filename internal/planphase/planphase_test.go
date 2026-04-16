@@ -609,6 +609,157 @@ func TestRefactorInvariantGateAbort(t *testing.T) {
 	}
 }
 
+// TestUpgradeHappyPath verifies that Upgrade path produces upgrade-scope.md + upgrade-target.md
+// and sets DepGateInverted=true on the result.
+func TestUpgradeHappyPath(t *testing.T) {
+	dir := initTestRepo(t)
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("checkout", "-b", "feature/upgrade-test")
+
+	var buf bytes.Buffer
+	mb := &mockBackend{
+		response: "source_version=next@13.5.6\ntarget_version=next@14.x\nbreaking_changes=12\nmanifests=package.json,package-lock.json\n",
+	}
+	opts := Options{
+		Task:         "Upgrade Next.js from 13 to 14",
+		WorkDir:      dir,
+		Backend:      mb,
+		GitHelper:    forgegit.New(dir),
+		StateManager: state.NewManager(dir),
+		// 'y' at upgrade confirmation gate, then 'y' at main plan confirm.
+		TermReader:   &mockTermReader{keys: []byte{'y', 'y'}},
+		Output:       &buf,
+		Clock:        fixedClock(),
+		PathOverride: router.PathUpgrade,
+	}
+
+	res, err := Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Action != ActionGo {
+		t.Errorf("action = %q, want go", res.Action)
+	}
+	if res.Path != router.PathUpgrade {
+		t.Errorf("path = %q, want upgrade", res.Path)
+	}
+	if !res.DepGateInverted {
+		t.Error("DepGateInverted = false, want true for Upgrade mode")
+	}
+	// Verify upgrade artifacts.
+	for _, name := range []string{"upgrade-scope.md", "upgrade-target.md", "task.md", "plan.md"} {
+		if _, err := os.Stat(filepath.Join(res.RunDir.Path, name)); err != nil {
+			t.Errorf("artifact %s missing: %v", name, err)
+		}
+	}
+	// upgrade-scope.md should mention target version.
+	scopeData, err := os.ReadFile(filepath.Join(res.RunDir.Path, "upgrade-scope.md"))
+	if err != nil {
+		t.Fatalf("read upgrade-scope.md: %v", err)
+	}
+	if !strings.Contains(string(scopeData), "next@14.x") {
+		t.Errorf("upgrade-scope.md does not mention target version; content:\n%s", scopeData)
+	}
+}
+
+// TestUpgradeGateDeclineAborts verifies that 'n' at the upgrade confirmation gate aborts.
+func TestUpgradeGateDeclineAborts(t *testing.T) {
+	dir := initTestRepo(t)
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("checkout", "-b", "feature/upgrade-abort")
+
+	var buf bytes.Buffer
+	mb := &mockBackend{
+		response: "source_version=django@3.2\ntarget_version=django@4.2\nbreaking_changes=5\nmanifests=requirements.txt\n",
+	}
+	opts := Options{
+		Task:         "Upgrade Django from 3.2 to 4.2",
+		WorkDir:      dir,
+		Backend:      mb,
+		GitHelper:    forgegit.New(dir),
+		StateManager: state.NewManager(dir),
+		// 'n' at upgrade confirmation gate → abort.
+		TermReader:   &mockTermReader{keys: []byte{'n'}},
+		Output:       &buf,
+		Clock:        fixedClock(),
+		PathOverride: router.PathUpgrade,
+	}
+
+	res, err := Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Action != ActionAbort {
+		t.Errorf("action = %q, want abort", res.Action)
+	}
+	sm := state.NewManager(dir)
+	marker, err := sm.ReadMarker(res.RunDir)
+	if err != nil {
+		t.Fatalf("ReadMarker: %v", err)
+	}
+	if marker != state.MarkerAborted {
+		t.Errorf("marker = %q, want ABORTED", marker)
+	}
+}
+
+// TestUpgradeForceYes verifies --yes bypasses upgrade gate and sets DepGateInverted.
+func TestUpgradeForceYes(t *testing.T) {
+	dir := initTestRepo(t)
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("checkout", "-b", "feature/upgrade-yes")
+
+	var buf bytes.Buffer
+	mb := &mockBackend{
+		response: "source_version=rails@7.0\ntarget_version=rails@7.1\nbreaking_changes=3\nmanifests=Gemfile,Gemfile.lock\n",
+	}
+	opts := Options{
+		Task:         "Upgrade Rails from 7.0 to 7.1",
+		WorkDir:      dir,
+		Backend:      mb,
+		ForceYes:     true,
+		GitHelper:    forgegit.New(dir),
+		StateManager: state.NewManager(dir),
+		Output:       &buf,
+		Clock:        fixedClock(),
+		PathOverride: router.PathUpgrade,
+	}
+
+	res, err := Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Action != ActionGo {
+		t.Errorf("action = %q, want go", res.Action)
+	}
+	if !res.DepGateInverted {
+		t.Error("DepGateInverted = false, want true for Upgrade mode")
+	}
+}
+
 // TestTaskSlug verifies slug generation.
 func TestTaskSlug(t *testing.T) {
 	t.Parallel()

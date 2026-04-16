@@ -68,6 +68,17 @@ func TestPathCriteriaCheck_Refactor(t *testing.T) {
 	}
 }
 
+func TestPathCriteriaCheck_Upgrade(t *testing.T) {
+	dir := t.TempDir()
+	if PathCriteriaCheck("upgrade", dir, "") {
+		t.Error("upgrade: expected false without upgrade-scope.md")
+	}
+	os.WriteFile(filepath.Join(dir, "upgrade-scope.md"), []byte("# Upgrade Scope\n"), 0o644)
+	if !PathCriteriaCheck("upgrade", dir, "") {
+		t.Error("upgrade: expected true with upgrade-scope.md")
+	}
+}
+
 func TestPathCriteriaCheck_Unknown(t *testing.T) {
 	if PathCriteriaCheck("unknown", t.TempDir(), "") {
 		t.Error("unknown: expected false")
