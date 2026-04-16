@@ -304,3 +304,67 @@
 - Full suite: all 20 packages green
 
 **Next: Step 18** — Gemini + Kiro backend adapters
+
+## 2026-04-16 — Iteration 18
+
+### Completed: Step 18 — Gemini + Kiro backend adapters
+
+**What was done:**
+- Created `internal/backend/gemini/adapter.go`: Gemini CLI adapter
+  - Invokes `gemini -p "$PROMPT" -o stream-json --approval-mode=yolo -s`
+  - Parses Gemini-shaped NDJSON: init/message/result events
+  - Stats from `result.stats.models.<model>.tokens`
+  - Exit code mapping: 53→Truncated, 42→input error, 1→general error
+  - Capabilities: StructuredOutput=true, NativeSubagents=false, window=1M
+- Created `internal/backend/kiro/adapter.go`: Kiro CLI adapter (ACP + text)
+  - ACP mode: JSON-RPC 2.0 over stdio (initialize → session/new → session/prompt)
+  - Text mode: `kiro-cli chat --no-interactive --trust-all-tools <prompt>`
+  - Text completion via `▸ Credits:` marker detection
+  - Capabilities: ACP=StructuredOutput=true, Text=false; skip flag=--trust-all-tools
+- Added `gemini-stream-json` and `kiro-text` modes to fake-backend
+- Updated `internal/cli/commands.go`: gemini + kiro wired into probe-backend utility
+- `forge backend set gemini` / `forge backend set kiro` both work
+- All 22 packages green
+
+**Next: Step 19** — Add, Fix, Refactor paths (brownfield loop-mode variants)
+
+## 2026-04-16 — Iteration 19
+
+### Current Focus: Step 19 — Add, Fix, Refactor paths (brownfield loop-mode variants)
+
+**Plan:**
+1. Extend `research.go`: add `researchAdd`, `researchFix`, `researchRefactor` functions with 2-3 researchers each
+2. Extend `artifacts.go`: path-specific artifacts (codebase-map.md + specs.md for Add; bug.md for Fix; target-shape.md + invariants.md for Refactor)
+3. Extend `planphase.go`: Refactor pre-loop invariant gate (renders invariants, asks confirmation before main plan confirm)
+4. Add `compdet/path_criteria.go`: `PathSpecificCheck(path, runDir)` function that evaluates path-specific programmatic completion criteria
+5. Add `planphase_test.go`: tests for Add/Fix/Refactor happy paths + Refactor invariant gate abort + Fix completion criteria
+
+**Key design decisions (from §4.7 and §2.1.9):**
+- Add: codebase-map.md (where to integrate) + specs.md
+- Fix: bug.md with repro script section; 3 researchers (reproduce, root-cause, adjacent-risk)
+- Refactor: target-shape.md + invariants.md; 3 researchers (current-shape, invariants, affected-tests)
+- Refactor gate: render invariants.md contents, ask "Are these behaviors preserved? [y/e/n]" before main plan confirm
+- PathSpecificProgrammatic for Fix: checks if regression test added (new test file / test function in diff)
+- PathSpecificProgrammatic for Add: checks if specs.md items all referenced in plan
+- PathSpecificProgrammatic for Refactor: checks invariants.md presence (invariants confirmed)
+
+## 2026-04-16 — Iteration 21
+
+### Completed: Step 21 — Upgrade mode (dep-gate-inverted loop)
+
+**What was done:**
+- Extended `researchOutput` with Upgrade fields: UpgradeSourceVersion, UpgradeTargetVersion, UpgradeBreakingCount, UpgradeManifests
+- Added `researchUpgrade()` in research.go: 2 researchers (scope + migration plan), parses key=value sentinel fields
+- Added `parseUpgradeScopeFields()` to extract source_version/target_version/breaking_changes/manifests from text
+- Added Upgrade artifact writing in artifacts.go: `upgrade-scope.md` + `upgrade-target.md`
+- Added `runUpgradeGate()` in planphase.go: pre-loop confirmation showing source→target version + dep manifests + [y/n] prompt
+- Added `DepGateInverted bool` to planphase.Result (true when path=upgrade)
+- Added `DepGateInverted bool` to loopengine.Options
+- Added `filterDepGateHits()` in engine.go: removes GateClassDependency/Lockfile hits when DepGateInverted=true
+- Added `printChainHookSuggestion()` for upgrade:fix/upgrade:test suggestions on completion
+- Added "upgrade" case in compdet/path_criteria.go: checks upgrade-scope.md exists
+- Wired DepGateInverted from planphase result → loopengine options in commands.go
+- Tests: TestUpgradeHappyPath, TestUpgradeGateDeclineAborts, TestUpgradeForceYes, TestDepGateInverted, TestDepGateInverted_NonDepGatesStillFire, TestPathCriteriaCheck_Upgrade
+- All 23 packages green
+
+**Next: Step 22** — Test mode (scope-restricted loop with production-touch escalation)

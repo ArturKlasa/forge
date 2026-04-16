@@ -68,6 +68,10 @@ type Options struct {
 	// DepGateInverted disables hard-stop escalation for dependency-manifest changes.
 	// Set true for Upgrade mode where dep-manifest modifications are expected.
 	DepGateInverted bool
+
+	// TestMode enables per-iteration production-code-touch escalation.
+	// Set true for Test mode where any production file modification requires human approval.
+	TestMode bool
 }
 
 // Result summarises the completed loop.
@@ -212,6 +216,44 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 							} else if ans.OptionKey == "a" {
 								// Apply: commit staged changes.
 								msg := fmt.Sprintf("forge(%s): iter %d (gate-approved)", path, i)
+								if commitErr := opts.GitHelper.CommitStaged(deadlineCtx, msg); commitErr == nil {
+									result.Commits++
+									sha, _, shaErr := opts.GitHelper.HEAD(deadlineCtx)
+									if shaErr == nil {
+										commitSHA = sha
+									}
+									changedFiles = diffPaths(string(diff))
+								}
+							}
+						} else {
+							policyHardStop = true
+							_ = opts.GitHelper.UnstageAll(deadlineCtx)
+						}
+					}
+
+					// Test mode: escalate when production code is touched.
+					if !policyHardStop && opts.TestMode && diffTouchesProduction(string(diff)) {
+						prodFiles := productionFilesInDiff(string(diff))
+						reason := fmt.Sprintf("Test mode needs to touch production code: %s", strings.Join(prodFiles, ", "))
+						fmt.Fprintf(opts.Output, "[%s] iter %d · ESCALATION — %s\n",
+							opts.Clock().Format("15:04:05"), i, reason)
+
+						if opts.EscalationManager != nil {
+							esc := testModeProductionTouchEscalation(
+								opts.EscalationManager.RunDir,
+								i, path, prodFiles, opts.Clock,
+							)
+							ans, escErr := opts.EscalationManager.Escalate(deadlineCtx, esc)
+							if escErr != nil || ans.OptionKey == "a" || ans.OptionKey == "abort-auto" {
+								// [a] abort or error → break loop.
+								policyHardStop = true
+								_ = opts.GitHelper.UnstageAll(deadlineCtx)
+							} else if ans.OptionKey == "s" {
+								// [s] skip: unstage and continue loop.
+								_ = opts.GitHelper.UnstageAll(deadlineCtx)
+							} else if ans.OptionKey == "m" {
+								// [m] modify with confirmation: commit staged changes.
+								msg := fmt.Sprintf("forge(%s): iter %d (production-touch approved)", path, i)
 								if commitErr := opts.GitHelper.CommitStaged(deadlineCtx, msg); commitErr == nil {
 									result.Commits++
 									sha, _, shaErr := opts.GitHelper.HEAD(deadlineCtx)
@@ -540,4 +582,82 @@ func truncateStr(s string, max int) string {
 		return s
 	}
 	return s[:max]
+}
+
+// isTestFile reports whether the given path is a test or test-infrastructure file.
+func isTestFile(p string) bool {
+	base := filepath.Base(p)
+	dir := filepath.ToSlash(p)
+
+	// Go test files.
+	if strings.HasSuffix(base, "_test.go") || strings.HasPrefix(base, "test_") {
+		return true
+	}
+	// Common test directories.
+	for _, seg := range []string{"tests/", "test/", "spec/", "__tests__/", "__mocks__/", "testdata/", "fixtures/"} {
+		if strings.Contains(dir, seg) {
+			return true
+		}
+	}
+	// Test infrastructure config files.
+	for _, name := range []string{
+		"jest.config.js", "jest.config.ts", "jest.config.mjs",
+		"vitest.config.ts", "vitest.config.js",
+		"pytest.ini", "conftest.py", "setup.cfg",
+		".coveragerc", "jest.setup.js", "jest.setup.ts",
+	} {
+		if base == name {
+			return true
+		}
+	}
+	// JavaScript/Python spec files.
+	if strings.HasSuffix(base, ".spec.ts") || strings.HasSuffix(base, ".spec.js") ||
+		strings.HasSuffix(base, ".test.ts") || strings.HasSuffix(base, ".test.js") ||
+		strings.HasSuffix(base, "_test.py") || strings.HasSuffix(base, "test_.py") {
+		return true
+	}
+	return false
+}
+
+// diffTouchesProduction reports whether the diff modifies any production (non-test) files.
+func diffTouchesProduction(diff string) bool {
+	for _, p := range diffPaths(diff) {
+		if !isTestFile(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// productionFilesInDiff returns the production (non-test) files modified in the diff.
+func productionFilesInDiff(diff string) []string {
+	var prod []string
+	for _, p := range diffPaths(diff) {
+		if !isTestFile(p) {
+			prod = append(prod, p)
+		}
+	}
+	return prod
+}
+
+// testModeProductionTouchEscalation builds an Escalation for a Test mode production-code touch.
+func testModeProductionTouchEscalation(runDir string, iteration int, path string, prodFiles []string, clock func() time.Time) *escalate.Escalation {
+	t := clock()
+	filesDesc := strings.Join(prodFiles, ", ")
+	return &escalate.Escalation{
+		ID:        escalate.GenerateID(t, iteration),
+		RaisedAt:  t,
+		Tier:      2,
+		Path:      path,
+		Iteration: iteration,
+		WhatTried: fmt.Sprintf("Test iteration touched production files: %s", filesDesc),
+		Decision:  "Test mode detected a production-file modification. Choose how to proceed.",
+		Options: []escalate.Option{
+			{Key: "m", Label: "Modify", Description: "apply production change with confirmation and continue"},
+			{Key: "s", Label: "Skip", Description: "revert this test and continue loop"},
+			{Key: "a", Label: "Abort", Description: "abort the test run"},
+		},
+		Recommended: "s",
+		Mandatory:   true,
+	}
 }

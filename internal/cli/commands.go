@@ -124,6 +124,7 @@ func newPlanCmd() *cobra.Command {
 					Path:            string(res.Path),
 					Output:          out,
 					DepGateInverted: res.DepGateInverted,
+					TestMode:        res.TestMode,
 				})
 				return loopErr
 			}

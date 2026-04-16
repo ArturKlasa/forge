@@ -126,8 +126,21 @@ func writePathArtifact(task string, path router.Path, branch string, res *resear
 			res.UpgradeSourceVersion, res.UpgradeTargetVersion, now)
 		return writeFile(dir, "upgrade-target.md", targetContent)
 
+	case router.PathTest:
+		// test-scope.md — framework, coverage targets, test patterns.
+		var sb strings.Builder
+		sb.WriteString("# Test Scope\n\n")
+		sb.WriteString(fmt.Sprintf("## Task\n%s\n\n", task))
+		sb.WriteString(fmt.Sprintf("## Test Framework\n%s\n\n", res.TestFramework))
+		sb.WriteString(fmt.Sprintf("## Coverage Target\n%d%%\n\n", res.TestCoverageTarget))
+		sb.WriteString(fmt.Sprintf("## Current Coverage\n%d%%\n\n", res.TestCurrentCoverage))
+		sb.WriteString(fmt.Sprintf("## Test Scope\n%s\n\n", res.TestScope))
+		sb.WriteString("## Research Summary\n")
+		sb.WriteString(res.DomainSummary)
+		sb.WriteString(fmt.Sprintf("\n\n---\n_created: %s_\n", now))
+		return writeFile(dir, "test-scope.md", sb.String())
+
 	default:
-		// Other paths (Test, one-shot) handled in later steps.
 		return nil
 	}
 }

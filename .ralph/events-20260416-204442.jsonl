@@ -8,3 +8,10 @@
 {"payload":"step=10, tests=8/8 router + 4/4 cli pass, demo=verified","topic":"step.done","ts":"2026-04-16T21:53:14.659716981+00:00"}
 {"payload":"step=12, tests=pass, commit=b5f46d5","topic":"step.done","ts":"2026-04-16T22:13:38.882713978+00:00"}
 {"payload":"step=14 tests=13 status=pass","topic":"step.done","ts":"2026-04-16T22:28:33.251759300+00:00"}
+{"payload":"step=15 tests=11 status=pass","topic":"step.done","ts":"2026-04-16T22:34:30.443418215+00:00"}
+{"payload":"step=16 tests=24 status=pass","topic":"step.done","ts":"2026-04-16T22:43:07.982739100+00:00"}
+{"payload":"step=17 tests=16 status=pass","topic":"step.done","ts":"2026-04-16T22:50:09.330576050+00:00"}
+{"payload":"step=18 tests=22 status=pass","topic":"step.done","ts":"2026-04-16T22:56:36.432461058+00:00"}
+{"payload":"step=19 tests=22 status=pass","topic":"step.done","ts":"2026-04-16T23:03:51.144369338+00:00"}
+{"payload":"step=20 tests=10 status=pass","topic":"step.done","ts":"2026-04-16T23:10:06.652842201+00:00"}
+{"payload":"step=21 tests=6 status=pass dep_gate_inverted=true artifacts=upgrade-scope.md+upgrade-target.md","topic":"step.done","ts":"2026-04-16T23:16:52.957646951+00:00"}

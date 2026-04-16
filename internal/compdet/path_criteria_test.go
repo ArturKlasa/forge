@@ -79,6 +79,24 @@ func TestPathCriteriaCheck_Upgrade(t *testing.T) {
 	}
 }
 
+func TestPathCriteriaCheck_Test(t *testing.T) {
+	dir := t.TempDir()
+	// Without test-scope.md: false even with test diff.
+	diff := "+++ b/foo_test.go\n+func TestFoo(t *testing.T) {}"
+	if PathCriteriaCheck("test", dir, diff) {
+		t.Error("test: expected false without test-scope.md")
+	}
+	// With test-scope.md but no test in diff: false.
+	os.WriteFile(filepath.Join(dir, "test-scope.md"), []byte("# Test Scope\n"), 0o644)
+	if PathCriteriaCheck("test", dir, "") {
+		t.Error("test: expected false without test in diff")
+	}
+	// With both: true.
+	if !PathCriteriaCheck("test", dir, diff) {
+		t.Error("test: expected true with test-scope.md and test in diff")
+	}
+}
+
 func TestPathCriteriaCheck_Unknown(t *testing.T) {
 	if PathCriteriaCheck("unknown", t.TempDir(), "") {
 		t.Error("unknown: expected false")

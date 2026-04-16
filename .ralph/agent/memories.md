@@ -2,6 +2,22 @@
 
 ## Patterns
 
+### mem-1776380628-4526
+> internal/planphase: Add/Fix/Refactor paths fully implemented. researchAdd→codebase-map.md+specs.md; researchFix→bug.md+repro section; researchRefactor→invariants.md+target-shape.md. Refactor pre-loop gate fires before main confirm; 'n' at gate→ABORTED. internal/compdet: PathCriteriaCheck(path, runDir, diff) wired into loop engine (iterDiff variable). Fix path checks: bug.md present + diff adds test func/file.
+<!-- tags: planphase, compdet, loopengine | created: 2026-04-16 -->
+
+### mem-1776379807-0c80
+> internal/brain package: Brain struct, 6 primitives (Classify/Judge/Distill/Diagnose/Draft/Spawn). Each: scoped prompt template + Backend call (120s timeout) + parse key=value sentinels + 1 retry. internal/ctxmgr: Manager.AssemblePrompt(ctx, path, budgetTokens) uses 7-section order (sys prompt, task.md, path artifact, plan.md, state.md, notes.md, instructions). Distill triggers: state>8k/notes>10k/plan>6k tokens (4 chars/token heuristic). With Brain: LLM compress + archive. Without: truncate + archive. Loop engine Options.Brain + Options.ContextBudgetTokens wired to all primitives.
+<!-- tags: brain, ctxmgr, loopengine | created: 2026-04-16 -->
+
+### mem-1776379375-2f38
+> internal/stuckdet package: Evaluate([]Entry) Result. Hard signals (4): off_topic_drift→Tier2, placeholder_accumulation→Tier2, same_error_fingerprint_4plus→Tier3, build_broken_5plus→Tier3. Soft signals (5) over 3-iter window: no_files(+2), no_plan_items(+2), no_state_delta(+2), regression(+3), self_report_stuck(+2). Soft thresholds: <3→Tier0, 3-5→Tier1, ≥6→Tier2. External deaths excluded. Engine parses <!--FORGE:build_status/self_report/error_fp/regression=--> from FinalText. Tier1→append state.md, Tier2→append plan.md, Tier3→escalate. internal/compdet: Evaluate(Signals) Result. Weighted sum; ≥8+judge_medium→Complete, 5-7→Audit, <5→Continue.
+<!-- tags: stuckdet, compdet, loopengine | created: 2026-04-16 -->
+
+### mem-1776378866-7fa8
+> internal/notify package: Channel interface (Name/Available/Notify), Message{Title,Summary,Body}, NotifyAll (fail-loud, all channels fire independently). 5 channels: FileSink (ESCALATION sentinel), BannerSink (ASCII banner → output + /dev/tty), OSCSink (OSC 9 + bell), TmuxSink ($TMUX → tmux display-message), BeepSink (gen2brain/beeep). DefaultChannels(runDir, output). EnvProbe: DBUS/DISPLAY/SSH/TMUX/WSL/CI detection. EscalationManager.Channels field for injection; lazily built at Escalate() time. forge doctor --test-notify (hidden).
+<!-- tags: notify, escalate, loopengine | created: 2026-04-16 -->
+
 ### mem-1776378502-9119
 > internal/escalate package: Manager.Escalate() writes awaiting-human.md (AtomicWrite shim: renameio on Unix, natefinch/atomic on Windows), writes ESCALATION sentinel, displays banner, then blocks on fsnotify dir-watch (debounce 250ms + stability check) or 2s polling on network-FS. ParseAnswer: CRLF→LF, requires id:/answer:/--- fields; ID mismatch→answer.stale.md.<ts>. --auto-resolve accept-recommended waits 5s for non-mandatory. GateScannerEscalation() builds escalation from loop engine; answer dispatch: a=commit, s=unstage+continue, p/d=break.
 <!-- tags: escalate, loopengine, policy | created: 2026-04-16 -->

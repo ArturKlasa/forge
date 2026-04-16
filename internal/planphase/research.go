@@ -22,6 +22,12 @@ type researchOutput struct {
 	UpgradeTargetVersion string
 	UpgradeBreakingCount int
 	UpgradeManifests     []string
+
+	// Test path fields.
+	TestFramework       string
+	TestCoverageTarget  int    // target coverage percentage
+	TestCurrentCoverage int    // current coverage percentage
+	TestScope           string // e.g. "src/checkout/**/*.ts"
 }
 
 // runResearch executes 1–3 research subagents appropriate for the given path.
@@ -46,6 +52,8 @@ func runResearch(ctx context.Context, opts Options, path router.Path, rd *state.
 		return researchRefactor(ctx, opts, b)
 	case router.PathUpgrade:
 		return researchUpgrade(ctx, opts, b)
+	case router.PathTest:
+		return researchTest(ctx, opts, b)
 	default:
 		fmt.Fprintln(opts.Output, "done (stub)")
 		return stubResearch(opts.Task), nil
@@ -365,6 +373,90 @@ func parseUpgradeScopeFields(text string) (sourceVer, targetVer string, breaking
 					manifests = append(manifests, m)
 				}
 			}
+		}
+	}
+	return
+}
+
+// researchTest runs 2 Test-path researchers: framework detection + coverage gap analysis.
+func researchTest(ctx context.Context, opts Options, b backend.Backend) (*researchOutput, error) {
+	task := opts.Task
+
+	// Researcher 1: detect test framework + current coverage + scope.
+	frameworkPrompt := backend.Prompt{
+		Body: fmt.Sprintf(`You are a test framework detection researcher.
+Task: %s
+
+Respond with exactly these fields (one per line):
+framework=<go|jest|vitest|pytest|unittest|cargo|rspec|minitest|unknown>
+current_coverage=<integer 0-100 or 0 if unknown>
+coverage_target=<integer 0-100; suggest 15 above current, max 95>
+test_scope=<glob pattern for files under test, e.g. src/checkout/**/*.ts or ./internal/...>
+
+Only output the four key=value lines.`, task),
+	}
+	frameworkRes, err := b.RunIteration(ctx, frameworkPrompt, backend.IterationOpts{MaxTurns: 1})
+	if err != nil {
+		return nil, fmt.Errorf("framework detection research: %w", err)
+	}
+
+	// Researcher 2: implementation plan for the test task.
+	planPrompt := backend.Prompt{
+		Body: fmt.Sprintf(`You are a test coverage planner.
+Task: %s
+
+Write a numbered plan (3–6 steps) to add the requested test coverage.
+Focus only on writing tests — do not modify production code unless absolutely unavoidable.
+Format: numbered list only.
+1. First step
+2. Second step`, task),
+	}
+	planRes, err := b.RunIteration(ctx, planPrompt, backend.IterationOpts{MaxTurns: 1})
+	if err != nil {
+		return nil, fmt.Errorf("test plan research: %w", err)
+	}
+
+	fmt.Fprintln(opts.Output, "done")
+	fmt.Fprint(opts.Output, "Drafting plan... done\n")
+
+	framework, currentCov, targetCov, testScope := parseTestScopeFields(frameworkRes.FinalText)
+
+	out := &researchOutput{
+		DomainSummary:       frameworkRes.FinalText,
+		SimilarPatterns:     planRes.FinalText,
+		PlanItems:           extractPlanItems(planRes.FinalText),
+		TestFramework:       framework,
+		TestCurrentCoverage: currentCov,
+		TestCoverageTarget:  targetCov,
+		TestScope:           testScope,
+	}
+	if len(out.PlanItems) == 0 {
+		out.PlanItems = stubResearch(task).PlanItems
+	}
+	if out.TestFramework == "" {
+		out.TestFramework = "unknown"
+	}
+	if out.TestScope == "" {
+		out.TestScope = "."
+	}
+	return out, nil
+}
+
+// parseTestScopeFields extracts key=value fields from the framework researcher response.
+func parseTestScopeFields(text string) (framework string, currentCov, targetCov int, testScope string) {
+	framework = "unknown"
+	testScope = "."
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "framework="):
+			framework = strings.TrimPrefix(line, "framework=")
+		case strings.HasPrefix(line, "current_coverage="):
+			fmt.Sscanf(strings.TrimPrefix(line, "current_coverage="), "%d", &currentCov)
+		case strings.HasPrefix(line, "coverage_target="):
+			fmt.Sscanf(strings.TrimPrefix(line, "coverage_target="), "%d", &targetCov)
+		case strings.HasPrefix(line, "test_scope="):
+			testScope = strings.TrimPrefix(line, "test_scope=")
 		}
 	}
 	return

@@ -760,6 +760,60 @@ func TestUpgradeForceYes(t *testing.T) {
 	}
 }
 
+// TestTestPathArtifacts verifies the Test path produces test-scope.md.
+func TestTestPathArtifacts(t *testing.T) {
+	dir := initTestRepo(t)
+	var buf bytes.Buffer
+	mb := &mockBackend{
+		response: "framework=go\ncurrent_coverage=45\ncoverage_target=60\ntest_scope=./internal/...\n",
+	}
+	opts := newTestOpts(t, dir, "Add tests for the checkout flow", 'y')
+	opts.Backend = mb
+	opts.Output = &buf
+	opts.PathOverride = router.PathTest
+
+	res, err := Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Action != ActionGo {
+		t.Fatalf("action = %q, want go", res.Action)
+	}
+	if !res.TestMode {
+		t.Error("TestMode = false, want true for Test path")
+	}
+	// Verify test-scope.md was created.
+	scopePath := filepath.Join(res.RunDir.Path, "test-scope.md")
+	data, err := os.ReadFile(scopePath)
+	if err != nil {
+		t.Fatalf("test-scope.md not found: %v", err)
+	}
+	content := string(data)
+	for _, want := range []string{"# Test Scope", "go", "60%", "45%", "./internal/..."} {
+		if !strings.Contains(content, want) {
+			t.Errorf("test-scope.md missing %q:\n%s", want, content)
+		}
+	}
+}
+
+// TestTestPathResearch verifies the Test path research output parses correctly.
+func TestTestPathResearch(t *testing.T) {
+	text := "framework=vitest\ncurrent_coverage=62\ncoverage_target=77\ntest_scope=src/checkout/**/*.ts\n"
+	framework, current, target, scope := parseTestScopeFields(text)
+	if framework != "vitest" {
+		t.Errorf("framework = %q, want vitest", framework)
+	}
+	if current != 62 {
+		t.Errorf("current_coverage = %d, want 62", current)
+	}
+	if target != 77 {
+		t.Errorf("coverage_target = %d, want 77", target)
+	}
+	if scope != "src/checkout/**/*.ts" {
+		t.Errorf("test_scope = %q, want src/checkout/**/*.ts", scope)
+	}
+}
+
 // TestTaskSlug verifies slug generation.
 func TestTaskSlug(t *testing.T) {
 	t.Parallel()

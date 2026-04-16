@@ -47,6 +47,10 @@ type Result struct {
 	// DepGateInverted is true for Upgrade mode — dep-manifest changes are expected,
 	// not treated as hard-stop gate hits.
 	DepGateInverted bool
+
+	// TestMode is true for Test mode — production-file modifications trigger
+	// mandatory human escalation each iteration.
+	TestMode bool
 }
 
 // TermReader abstracts single-keystroke reading for testability.
@@ -221,6 +225,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 				Path:            detectedPath,
 				Branch:          branch,
 				DepGateInverted: detectedPath == router.PathUpgrade,
+				TestMode:        detectedPath == router.PathTest,
 			}, nil
 		}
 
@@ -241,6 +246,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 				Path:            detectedPath,
 				Branch:          branch,
 				DepGateInverted: detectedPath == router.PathUpgrade,
+				TestMode:        detectedPath == router.PathTest,
 			}, nil
 
 		case 'n', 'N':

@@ -28,6 +28,8 @@ func PathCriteriaCheck(path, runDir, diff string) bool {
 		return fileExists(runDir, "invariants.md")
 	case "upgrade":
 		return fileExists(runDir, "upgrade-scope.md")
+	case "test":
+		return fileExists(runDir, "test-scope.md") && diffAddsTest(diff)
 	default:
 		return false
 	}

@@ -643,6 +643,136 @@ func TestDepGateInverted_NonDepGatesStillFire(t *testing.T) {
 	}
 }
 
+// TestTestMode_ProductionTouchHaltsLoop verifies that TestMode=true causes the loop
+// to halt when an iteration modifies a production (non-test) file.
+func TestTestMode_ProductionTouchHaltsLoop(t *testing.T) {
+	workDir, git := initGitRepo(t)
+	rd := makeRunDir(t, workDir)
+
+	iteration := 0
+	// Iter 1: modify a production file — should trigger escalation and halt.
+	mockBE := &iterCountBackend{
+		responses: []string{"iter 1 ok", "iter 2 ok"},
+		iteration: &iteration,
+		onRun: func(i int) {
+			if i == 1 {
+				_ = os.WriteFile(filepath.Join(workDir, "main.go"), []byte("package main\nfunc main() {}"), 0o644)
+			}
+		},
+	}
+
+	pscanner, err := policy.NewScanner("", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("policy.NewScanner: %v", err)
+	}
+
+	var out strings.Builder
+	res, err := Run(context.Background(), Options{
+		RunDir:        rd,
+		Backend:       mockBE,
+		GitHelper:     git,
+		StateManager:  state.NewManager(workDir),
+		MaxIterations: 10,
+		Path:          "test",
+		Output:        &out,
+		PolicyScanner: pscanner,
+		TestMode:      true,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Loop should halt (no EscalationManager → policyHardStop=true).
+	if res.Complete {
+		t.Error("Complete = true; want false — production touch should halt loop")
+	}
+	if !strings.Contains(out.String(), "ESCALATION") {
+		t.Errorf("expected ESCALATION in output:\n%s", out.String())
+	}
+}
+
+// TestTestMode_TestOnlyTouchDoesNotEscalate verifies that TestMode=true does NOT
+// halt the loop when only test files are modified.
+func TestTestMode_TestOnlyTouchDoesNotEscalate(t *testing.T) {
+	workDir, git := initGitRepo(t)
+	rd := makeRunDir(t, workDir)
+
+	// Commit any setup files (e.g. .gitignore added by state.Init) so iter 1
+	// sees a clean working tree before writing the test file.
+	_ = git.StageAll(context.Background())
+	cmd := exec.Command("git", "commit", "-m", "setup", "--allow-empty")
+	cmd.Dir = workDir
+	_ = cmd.Run()
+
+	iteration := 0
+	mockBE := &iterCountBackend{
+		responses: []string{"iter 1 ok", "TASK_COMPLETE"},
+		iteration: &iteration,
+		onRun: func(i int) {
+			if i == 1 {
+				_ = os.WriteFile(filepath.Join(workDir, "foo_test.go"), []byte("package main\nimport \"testing\"\nfunc TestFoo(t *testing.T) {}"), 0o644)
+			}
+		},
+	}
+
+	pscanner, err := policy.NewScanner("", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("policy.NewScanner: %v", err)
+	}
+
+	var out strings.Builder
+	res, err := Run(context.Background(), Options{
+		RunDir:        rd,
+		Backend:       mockBE,
+		GitHelper:     git,
+		StateManager:  state.NewManager(workDir),
+		MaxIterations: 10,
+		Path:          "test",
+		Output:        &out,
+		PolicyScanner: pscanner,
+		TestMode:      true,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if !res.Complete {
+		t.Error("Complete = false; want true — test-only files should not trigger escalation")
+	}
+	if strings.Contains(out.String(), "ESCALATION") {
+		t.Errorf("unexpected ESCALATION for test-only changes:\n%s", out.String())
+	}
+}
+
+// TestIsTestFile verifies the isTestFile helper covers the documented patterns.
+func TestIsTestFile(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"internal/foo_test.go", true},
+		{"test_foo.go", true},
+		{"tests/foo.go", true},
+		{"spec/bar.rb", true},
+		{"__tests__/App.test.js", true},
+		{"jest.config.js", true},
+		{"pytest.ini", true},
+		{"conftest.py", true},
+		{"src/App.test.ts", true},
+		{"src/App.spec.ts", true},
+		{"src/App.go", false},
+		{"internal/handler.go", false},
+		{"main.go", false},
+		{"pkg/foo/bar.go", false},
+	}
+	for _, c := range cases {
+		got := isTestFile(c.path)
+		if got != c.want {
+			t.Errorf("isTestFile(%q) = %v, want %v", c.path, got, c.want)
+		}
+	}
+}
+
 // iterCountBackend is a test Backend that cycles through canned responses.
 type iterCountBackend struct {
 	responses []string
