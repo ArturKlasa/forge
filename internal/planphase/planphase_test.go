@@ -402,6 +402,213 @@ func TestGenerateRunID(t *testing.T) {
 	}
 }
 
+// TestAddPathHappyPath verifies the Add path produces codebase-map.md + specs.md.
+func TestAddPathHappyPath(t *testing.T) {
+	dir := initTestRepo(t)
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("checkout", "-b", "feature/add-test")
+
+	var buf bytes.Buffer
+	mb := &mockBackend{
+		response: "1. Map codebase\n2. Add feature\n3. Test it\n",
+	}
+	opts := Options{
+		Task:         "Add a metrics endpoint",
+		WorkDir:      dir,
+		Backend:      mb,
+		GitHelper:    forgegit.New(dir),
+		StateManager: state.NewManager(dir),
+		TermReader:   &mockTermReader{keys: []byte{'y'}},
+		Output:       &buf,
+		Clock:        fixedClock(),
+		// Force Add path.
+		PathOverride: router.PathAdd,
+	}
+
+	res, err := Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Action != ActionGo {
+		t.Errorf("action = %q, want go", res.Action)
+	}
+	if res.Path != router.PathAdd {
+		t.Errorf("path = %q, want add", res.Path)
+	}
+	// Verify Add-specific artifacts.
+	for _, name := range []string{"codebase-map.md", "specs.md"} {
+		if _, err := os.Stat(filepath.Join(res.RunDir.Path, name)); err != nil {
+			t.Errorf("artifact %s missing: %v", name, err)
+		}
+	}
+	// Verify specs.md contains plan items.
+	specsData, _ := os.ReadFile(filepath.Join(res.RunDir.Path, "specs.md"))
+	if !strings.Contains(string(specsData), "Map codebase") {
+		t.Errorf("specs.md missing plan items: %s", specsData)
+	}
+}
+
+// TestFixPathHappyPath verifies the Fix path produces bug.md.
+func TestFixPathHappyPath(t *testing.T) {
+	dir := initTestRepo(t)
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("checkout", "-b", "feature/fix-test")
+
+	var buf bytes.Buffer
+	mb := &mockBackend{
+		response: "1. Write regression test\n2. Fix the root cause\n3. Verify fix\n",
+	}
+	opts := Options{
+		Task:         "Fix the off-by-one in parser.go at line 42",
+		WorkDir:      dir,
+		Backend:      mb,
+		GitHelper:    forgegit.New(dir),
+		StateManager: state.NewManager(dir),
+		TermReader:   &mockTermReader{keys: []byte{'y'}},
+		Output:       &buf,
+		Clock:        fixedClock(),
+		PathOverride: router.PathFix,
+	}
+
+	res, err := Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Action != ActionGo {
+		t.Errorf("action = %q, want go", res.Action)
+	}
+	// Verify bug.md exists.
+	bugPath := filepath.Join(res.RunDir.Path, "bug.md")
+	if _, err := os.Stat(bugPath); err != nil {
+		t.Errorf("bug.md missing: %v", err)
+	}
+	bugData, _ := os.ReadFile(bugPath)
+	if !strings.Contains(string(bugData), "Repro Script") {
+		t.Errorf("bug.md missing repro script section: %s", bugData)
+	}
+}
+
+// TestRefactorPathHappyPath verifies the Refactor path produces target-shape.md + invariants.md.
+func TestRefactorPathHappyPath(t *testing.T) {
+	dir := initTestRepo(t)
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("checkout", "-b", "feature/refactor-test")
+
+	var buf bytes.Buffer
+	mb := &mockBackend{
+		// First call: invariants research; second call: plan research.
+		response: "- All existing APIs remain stable\n- Tests still pass\n",
+	}
+	opts := Options{
+		Task:         "Refactor the auth module to reduce coupling",
+		WorkDir:      dir,
+		Backend:      mb,
+		GitHelper:    forgegit.New(dir),
+		StateManager: state.NewManager(dir),
+		// invariant gate: 'y' confirm; plan gate: 'y' go.
+		TermReader:   &mockTermReader{keys: []byte{'y', 'y'}},
+		Output:       &buf,
+		Clock:        fixedClock(),
+		PathOverride: router.PathRefactor,
+	}
+
+	res, err := Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Action != ActionGo {
+		t.Errorf("action = %q, want go", res.Action)
+	}
+	// Verify Refactor-specific artifacts.
+	for _, name := range []string{"target-shape.md", "invariants.md"} {
+		if _, err := os.Stat(filepath.Join(res.RunDir.Path, name)); err != nil {
+			t.Errorf("artifact %s missing: %v", name, err)
+		}
+	}
+	// Verify invariants.md content.
+	invData, _ := os.ReadFile(filepath.Join(res.RunDir.Path, "invariants.md"))
+	if !strings.Contains(string(invData), "Behavioral Invariants") {
+		t.Errorf("invariants.md missing header: %s", invData)
+	}
+	// Verify invariant gate fired (banner in output).
+	output := buf.String()
+	if !strings.Contains(output, "Invariant Gate") {
+		t.Errorf("expected invariant gate in output, got: %s", output)
+	}
+}
+
+// TestRefactorInvariantGateAbort verifies 'n' at invariant gate aborts the run.
+func TestRefactorInvariantGateAbort(t *testing.T) {
+	dir := initTestRepo(t)
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("checkout", "-b", "feature/refactor-abort")
+
+	var buf bytes.Buffer
+	mb := &mockBackend{
+		response: "- All APIs remain stable\n- Tests still pass\n",
+	}
+	opts := Options{
+		Task:         "Refactor auth module",
+		WorkDir:      dir,
+		Backend:      mb,
+		GitHelper:    forgegit.New(dir),
+		StateManager: state.NewManager(dir),
+		// 'n' at invariant gate → abort.
+		TermReader:   &mockTermReader{keys: []byte{'n'}},
+		Output:       &buf,
+		Clock:        fixedClock(),
+		PathOverride: router.PathRefactor,
+	}
+
+	res, err := Run(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Action != ActionAbort {
+		t.Errorf("action = %q, want abort", res.Action)
+	}
+	sm := state.NewManager(dir)
+	marker, err := sm.ReadMarker(res.RunDir)
+	if err != nil {
+		t.Fatalf("ReadMarker: %v", err)
+	}
+	if marker != state.MarkerAborted {
+		t.Errorf("marker = %q, want ABORTED", marker)
+	}
+}
+
 // TestTaskSlug verifies slug generation.
 func TestTaskSlug(t *testing.T) {
 	t.Parallel()

@@ -1,5 +1,5 @@
 // Package planphase implements the Plan Phase pipeline: pre-gates, research,
-// artifact generation, and confirmation UI. Step 11 implements Create path only.
+// artifact generation, and confirmation UI. Supports Create, Add, Fix, Refactor paths.
 package planphase
 
 import (
@@ -146,7 +146,18 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("write artifacts: %w", err)
 	}
 
-	// ── 6. Confirmation UI ──────────────────────────────────────────────────
+	// ── 6. Refactor invariant gate (before main confirmation) ───────────────
+	if detectedPath == router.PathRefactor {
+		aborted, err := runInvariantGate(ctx, opts, rd, sm)
+		if err != nil {
+			return nil, err
+		}
+		if aborted {
+			return &Result{Action: ActionAbort, RunDir: rd, Path: detectedPath, Branch: branch}, nil
+		}
+	}
+
+	// ── 7. Confirmation UI ──────────────────────────────────────────────────
 	planItems, err := parsePlanItems(filepath.Join(rd.Path, "plan.md"))
 	if err != nil {
 		return nil, fmt.Errorf("parse plan: %w", err)
@@ -215,6 +226,67 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 
 		default:
 			// Ignore unknown keys.
+		}
+	}
+}
+
+// runInvariantGate renders the Refactor invariant confirmation gate.
+// Returns (true, nil) when the user aborts; (false, nil) when confirmed.
+func runInvariantGate(ctx context.Context, opts Options, rd *state.RunDir, sm *state.Manager) (aborted bool, err error) {
+	_ = ctx // may be used for future async operations
+
+	invariantsPath := filepath.Join(rd.Path, "invariants.md")
+	data, readErr := os.ReadFile(invariantsPath)
+	if readErr != nil {
+		// No invariants file — skip the gate.
+		return false, nil
+	}
+
+	fmt.Fprintln(opts.Output, "")
+	fmt.Fprintln(opts.Output, "═══ Refactor Invariant Gate ═══════════════════════════════════")
+	fmt.Fprintln(opts.Output, "The following behaviors must be preserved after the refactor:")
+	fmt.Fprintln(opts.Output, "")
+	fmt.Fprintln(opts.Output, string(data))
+	fmt.Fprint(opts.Output, "[y] confirm invariants  [e] edit invariants  [n] abort\n\n> ")
+
+	if opts.ForceYes {
+		fmt.Fprintln(opts.Output, "Auto-confirming invariants (--yes).")
+		return false, nil
+	}
+
+	for {
+		key, err := readKey(opts)
+		if err != nil {
+			return false, fmt.Errorf("read invariant gate key: %w", err)
+		}
+		switch key {
+		case 'y', 'Y':
+			fmt.Fprintln(opts.Output, "")
+			fmt.Fprintln(opts.Output, "Invariants confirmed.")
+			return false, nil
+		case 'n', 'N':
+			fmt.Fprintln(opts.Output, "")
+			fmt.Fprintln(opts.Output, "Aborted at invariant gate.")
+			if err := sm.Transition(rd, state.MarkerAborted); err != nil {
+				return true, err
+			}
+			return true, nil
+		case 'e', 'E':
+			fmt.Fprintln(opts.Output, "")
+			if err := openEditor(opts, invariantsPath); err != nil {
+				fmt.Fprintf(opts.Output, "editor error: %v\n", err)
+			}
+			// Re-read and re-render.
+			data, readErr = os.ReadFile(invariantsPath)
+			if readErr != nil {
+				return false, fmt.Errorf("read invariants after edit: %w", readErr)
+			}
+			fmt.Fprintln(opts.Output, "")
+			fmt.Fprintln(opts.Output, "═══ Refactor Invariant Gate ═══════════════════════════════════")
+			fmt.Fprintln(opts.Output, "The following behaviors must be preserved after the refactor:")
+			fmt.Fprintln(opts.Output, "")
+			fmt.Fprintln(opts.Output, string(data))
+			fmt.Fprint(opts.Output, "[y] confirm invariants  [e] edit invariants  [n] abort\n\n> ")
 		}
 	}
 }

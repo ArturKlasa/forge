@@ -65,12 +65,14 @@ func toStuckEntry(e LedgerEntry) stuckdet.Entry {
 }
 
 // buildCompletionSignals derives compdet.Signals from the current ledger entry.
-func buildCompletionSignals(entry LedgerEntry, allPlanItemsClosed bool, judgeVerdict compdet.JudgeVerdict) compdet.Signals {
+// path is the current loop path (e.g. "fix", "add"); runDir is the run directory;
+// diff is the current iteration's cached diff (for path-specific checks).
+func buildCompletionSignals(entry LedgerEntry, allPlanItemsClosed bool, judgeVerdict compdet.JudgeVerdict, path, runDir, diff string) compdet.Signals {
 	return compdet.Signals{
 		TaskCompleteSentinel:     entry.Complete,
 		BuildPasses:              entry.BuildStatus == "pass",
 		TestsPasses:              len(entry.Regressions) == 0 && entry.BuildStatus == "pass",
-		PathSpecificProgrammatic: false, // wired in step 19+
+		PathSpecificProgrammatic: compdet.PathCriteriaCheck(path, runDir, diff),
 		AllPlanItemsClosed:       allPlanItemsClosed,
 		JudgeVerdict:             judgeVerdict,
 		PlaceholderHits:          entry.NewHighConfidencePlaceholders,

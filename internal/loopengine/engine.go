@@ -167,6 +167,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		commitSHA := ""
 		changedFiles := []string{}
 		newHighConfPlaceholders := 0
+		iterDiff := "" // accumulated diff for path-specific completion check
 
 		if opts.GitHelper != nil {
 			dirty, dirtyErr := opts.GitHelper.IsDirty(deadlineCtx)
@@ -174,6 +175,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 				// Stage everything so we can get a complete diff (incl. new files).
 				_ = opts.GitHelper.StageAll(deadlineCtx)
 				diff, _ := opts.GitHelper.DiffCached(deadlineCtx)
+				iterDiff = string(diff)
 
 				if opts.PolicyScanner != nil && len(diff) > 0 {
 					scan := opts.PolicyScanner.ScanIteration(diff, false)
@@ -269,7 +271,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		judgeVerdict := judgeCompletion(deadlineCtx, opts.Brain, runDir, iterResult.FinalText)
 
 		// Completion detector.
-		compSignals := buildCompletionSignals(entry, false, judgeVerdict)
+		compSignals := buildCompletionSignals(entry, false, judgeVerdict, string(path), runDir, iterDiff)
 		compResult := buildCompletion(compSignals)
 		entry.CompletionScore = compResult.Score
 		// Override TASK_COMPLETE with completion detector threshold.

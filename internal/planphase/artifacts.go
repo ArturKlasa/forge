@@ -13,7 +13,8 @@ import (
 )
 
 // writeArtifacts creates the plan-phase artifact files inside the run directory.
-// For Create path: task.md, target-shape.md, plan.md, state.md, notes.md
+// Common artifacts: task.md, plan.md, state.md, notes.md.
+// Path-specific artifacts vary per path (see below).
 func writeArtifacts(task string, path router.Path, branch string, res *researchOutput, rd *state.RunDir) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 
@@ -23,10 +24,8 @@ func writeArtifacts(task string, path router.Path, branch string, res *researchO
 		return err
 	}
 
-	// target-shape.md — Create-path artifact.
-	targetContent := fmt.Sprintf("# Target Shape\n\n## Task\n%s\n\n## Domain Analysis\n%s\n\n## Branch\n%s\n\n---\n_created: %s_\n",
-		task, res.DomainSummary, branch, now)
-	if err := writeFile(rd.Path, "target-shape.md", targetContent); err != nil {
+	// Path-specific artifact(s).
+	if err := writePathArtifact(task, path, branch, res, rd.Path, now); err != nil {
 		return err
 	}
 
@@ -54,6 +53,61 @@ func writeArtifacts(task string, path router.Path, branch string, res *researchO
 	}
 
 	return nil
+}
+
+// writePathArtifact writes the path-specific artifact(s) for each loop path.
+func writePathArtifact(task string, path router.Path, branch string, res *researchOutput, dir, now string) error {
+	switch path {
+	case router.PathCreate:
+		content := fmt.Sprintf("# Target Shape\n\n## Task\n%s\n\n## Domain Analysis\n%s\n\n## Branch\n%s\n\n---\n_created: %s_\n",
+			task, res.DomainSummary, branch, now)
+		return writeFile(dir, "target-shape.md", content)
+
+	case router.PathAdd:
+		// codebase-map.md — where to integrate.
+		codebaseMap := fmt.Sprintf("# Codebase Map\n\n## Task\n%s\n\n## Integration Analysis\n%s\n\n---\n_created: %s_\n",
+			task, res.DomainSummary, now)
+		if err := writeFile(dir, "codebase-map.md", codebaseMap); err != nil {
+			return err
+		}
+		// specs.md — feature specification.
+		var sb strings.Builder
+		sb.WriteString("# Feature Specs\n\n## Task\n")
+		sb.WriteString(task)
+		sb.WriteString("\n\n## Implementation Steps\n\n")
+		for i, item := range res.PlanItems {
+			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, item))
+		}
+		sb.WriteString(fmt.Sprintf("\n---\n_created: %s_\n", now))
+		return writeFile(dir, "specs.md", sb.String())
+
+	case router.PathFix:
+		// bug.md — repro + root cause.
+		content := fmt.Sprintf("# Bug Report\n\n## Task\n%s\n\n## Reproduction\n%s\n\n## Repro Script\n\n```bash\n# Steps to reproduce:\n# 1. Run the affected code path\n# 2. Observe incorrect behavior\n```\n\n---\n_created: %s_\n",
+			task, res.DomainSummary, now)
+		return writeFile(dir, "bug.md", content)
+
+	case router.PathRefactor:
+		// target-shape.md — desired end state.
+		targetContent := fmt.Sprintf("# Target Shape\n\n## Task\n%s\n\n## Refactoring Analysis\n%s\n\n---\n_created: %s_\n",
+			task, res.DomainSummary, now)
+		if err := writeFile(dir, "target-shape.md", targetContent); err != nil {
+			return err
+		}
+		// invariants.md — behaviors that must be preserved.
+		var sb strings.Builder
+		sb.WriteString("# Behavioral Invariants\n\n")
+		sb.WriteString("The following behaviors must be preserved after this refactor:\n\n")
+		for _, inv := range res.Invariants {
+			sb.WriteString(fmt.Sprintf("- %s\n", inv))
+		}
+		sb.WriteString(fmt.Sprintf("\n---\n_created: %s_\n", now))
+		return writeFile(dir, "invariants.md", sb.String())
+
+	default:
+		// Other paths (Upgrade, Test, one-shot) handled in later steps.
+		return nil
+	}
 }
 
 // writeFile writes content to path/name, creating any parent dirs as needed.
