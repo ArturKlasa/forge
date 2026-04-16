@@ -166,3 +166,41 @@
 - Tests use fake-backend by overriding the executable path (ClaudeExecutable option)
 - Session ID: uuid.New() per call, always pass --no-session-persistence
 - Error subtypes: success, error_max_turns, error_max_budget_usd → map to IterationResult fields
+
+## 2026-04-16 — Iteration 10
+
+### Completed: Step 10 — Intent Router
+
+**What was done:**
+- Created `internal/router/` package with `Router` type
+- `Route()` implements the 4-step ladder: keyword fast-path → LLM classifier → human escalation
+- `keywordTable` maps all 10 path trigger verbs per §2.1.2
+- `detectChain()` uses regex to find "X and Y" multi-verb patterns; `PredefinedChains` map for v1 inter-stage contracts
+- `WithPathOverride(p)` option short-circuits (--path flag equivalent)
+- LLM classifier parses `path=<name>` and `confidence=<low|medium|high>` from backend response
+- `forge plan` command updated to use Router and show detected path/chain
+- 8 router tests + 4 CLI integration tests all pass
+- Demo verified: "Fix the login redirect bug" → fix path; "Review and fix the auth module" → review:fix chain
+
+**Next: Step 11** — Plan Phase (Create path) + confirmation UI
+
+## 2026-04-16 — Iteration 11
+
+### Completed: Step 11 — Plan Phase (Create path) + confirmation UI
+
+**What was done:**
+- Created `internal/planphase/` package with 5 files:
+  - `planphase.go`: Run() function, Options/Result types, confirmation UI rendering
+  - `pregates.go`: dirty tree + protected branch checks with auto-switch
+  - `research.go`: 1-2 research subagents for Create path (stub when no backend)
+  - `artifacts.go`: writes task.md, target-shape.md, plan.md, state.md, notes.md
+  - `ui_unix.go` + `ui_windows.go`: platform-specific raw terminal key reading
+- 10 tests all pass: happy path, abort, --yes, dirty tree gate, protected branch auto-switch, edit key, backend research, redo research, run ID format, task slug
+- Fixed flag conflict: plan command's local `--path` flag renamed to `--mode` to avoid conflict with root persistent `--path` (working directory)
+- Chain detection returns early (before pre-gates) — chains handled in step 23
+- Updated CLI tests to use new plan command behavior
+- Demo verified: protected branch auto-switch, --yes bypass, n abort, full plan display
+
+**Key bug fixed:** Local `--path` flag in plan subcommand conflicted with root persistent `--path` (working dir), causing wrong workDir when --path was set. Renamed to --mode.
+
+**Next: Step 12** — Loop Engine — minimal Ralph loop, first end-to-end demo

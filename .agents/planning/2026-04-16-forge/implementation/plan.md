@@ -36,7 +36,7 @@ Each checkbox corresponds 1:1 to a step below. Tick as you complete each step's 
 - [x] **Step 8:** Backend interface + fake-backend test binary
 - [x] **Step 9:** Claude Code backend adapter
 - [x] **Step 10:** Intent Router — keyword + LLM classifier + escalation ladder
-- [ ] **Step 11:** Plan Phase (Create path) + confirmation UI
+- [x] **Step 11:** Plan Phase (Create path) + confirmation UI
 - [ ] **Step 12:** Loop Engine — minimal Ralph loop, first end-to-end demo
 - [ ] **Step 13:** Policy scanners — Security (gitleaks) + Placeholder + Gate
 - [ ] **Step 14:** Escalation Manager — mailbox pair + `awaiting-human.md` / `answer.md` flow

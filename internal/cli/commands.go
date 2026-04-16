@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"context"
-
 	"strings"
 
 	"github.com/arturklasa/forge/internal/backend"
@@ -17,6 +16,7 @@ import (
 	"github.com/arturklasa/forge/internal/config"
 	forgegit "github.com/arturklasa/forge/internal/git"
 	forgelog "github.com/arturklasa/forge/internal/log"
+	"github.com/arturklasa/forge/internal/planphase"
 	"github.com/arturklasa/forge/internal/router"
 	"github.com/arturklasa/forge/internal/state"
 	forgelock "github.com/arturklasa/forge/internal/state/lock"
@@ -44,48 +44,60 @@ func RegisterCommands(root *cobra.Command) {
 func newPlanCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plan <task>",
-		Short: "Detect intent and show what forge would do (no execution)",
+		Short: "Research, draft a plan, and confirm before running",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			task := args[0]
 
-			pathFlag, _ := cmd.Flags().GetString("path")
-
-			var routerOpts []router.Option
-			if pathFlag != "" {
-				routerOpts = append(routerOpts, router.WithPathOverride(router.Path(pathFlag)))
+			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			if workDir == "" {
+				var err error
+				workDir, err = os.Getwd()
+				if err != nil {
+					return err
+				}
 			}
-			r := router.New(routerOpts...)
-			res, err := r.Route(cmd.Context(), task)
+
+			modeFlag, _ := cmd.Flags().GetString("mode")
+			yesFlag, _ := cmd.Root().PersistentFlags().GetBool("yes")
+
+			opts := planphase.Options{
+				Task:         task,
+				WorkDir:      workDir,
+				ForceYes:     yesFlag,
+				Output:       cmd.OutOrStdout(),
+				StateManager: state.NewManager(workDir),
+				GitHelper:    forgegit.New(workDir),
+			}
+			if modeFlag != "" {
+				opts.PathOverride = router.Path(modeFlag)
+			}
+
+			res, err := planphase.Run(cmd.Context(), opts)
 			if err != nil {
-				return fmt.Errorf("intent routing: %w", err)
+				return err
 			}
 
 			out := cmd.OutOrStdout()
-			if res.NeedsHumanEscalation {
-				fmt.Fprintln(out, "Intent unclear — human input required.")
-				if res.Recommendation != "" {
-					fmt.Fprintf(out, "Best guess: %s\n", res.Recommendation)
-				}
-				return nil
-			}
-			if res.IsChain {
+			switch res.Action {
+			case planphase.ActionChain:
 				fmt.Fprintf(out, "Detected: %s chain\n", res.ChainKey)
 				for i, p := range res.Chain {
 					fmt.Fprintf(out, "Stages: %d/%s\n", i+1, strings.Title(string(p)))
 				}
-				if !res.Predefined {
-					fmt.Fprintf(out, "Warning: chain %q has no predefined inter-stage contract.\n", res.ChainKey)
-				}
+				fmt.Fprintln(out, "(Composite chaining implemented in step 23)")
+				return nil
+			case planphase.ActionAbort:
+				return nil
+			default:
+				// ActionGo: plan phase accepted, loop engine would start here (step 12).
+				fmt.Fprintf(out, "Plan accepted. Run ID: %s\n", res.RunDir.ID)
+				fmt.Fprintf(out, "(Loop engine starts in step 12)\n")
 				return nil
 			}
-			fmt.Fprintf(out, "Detected: %s path (confidence: %s; %s)\n",
-				res.Path, res.Confidence, res.Method)
-			fmt.Fprintln(out, "(...plan phase would continue in step 11)")
-			return nil
 		},
 	}
-	cmd.Flags().String("path", "", "Force a specific mode path (create|add|fix|refactor|upgrade|test|review|document|explain|research)")
+	cmd.Flags().String("mode", "", "Force a specific mode (create|add|fix|refactor|upgrade|test|review|document|explain|research)")
 	return cmd
 }
 
