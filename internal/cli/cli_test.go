@@ -98,7 +98,7 @@ func TestUnimplementedStubs(t *testing.T) {
 		{[]string{"show", "fake-run-id"}, 24, false},
 		{[]string{"clean"}, 24, false},
 		// doctor is partially implemented in step 6 (git checks)
-		{[]string{"plan", "do something"}, 11, false},
+		// plan is implemented in step 10 — removed from stubs list
 		{[]string{"some task description"}, 12, true},
 	}
 
@@ -154,6 +154,30 @@ func TestStatusCommand(t *testing.T) {
 	}
 	if !strings.Contains(out, "RUNNING") {
 		t.Errorf("expected RUNNING in output, got: %q", out)
+	}
+}
+
+// TestPlanCommand verifies that `forge plan` detects intent and prints the path.
+func TestPlanCommand(t *testing.T) {
+	tests := []struct {
+		args    []string
+		wantOut string
+	}{
+		{[]string{"plan", "Fix the login redirect bug"}, "fix path"},
+		{[]string{"plan", "Create a hello-world Go CLI"}, "create path"},
+		{[]string{"plan", "Review and fix the auth module"}, "review:fix chain"},
+		{[]string{"plan", "--path", "create", "Fix the login redirect bug"}, "create path"},
+	}
+	for _, tt := range tests {
+		t.Run(strings.Join(tt.args, "_"), func(t *testing.T) {
+			out, _, err := execute(tt.args...)
+			if err != nil {
+				t.Fatalf("plan: unexpected error: %v", err)
+			}
+			if !strings.Contains(out, tt.wantOut) {
+				t.Errorf("expected %q in output, got: %q", tt.wantOut, out)
+			}
+		})
 	}
 }
 
