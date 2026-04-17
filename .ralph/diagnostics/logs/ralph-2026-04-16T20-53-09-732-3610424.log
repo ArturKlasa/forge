@@ -11,3 +11,11 @@ Preflight: ✓ config ✓ hooks ✓ backend ✓ telegram ⚠ git ✓ paths ✓ t
 [2m2026-04-17T01:59:05.605685Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 18 memories from store
 [2m2026-04-17T01:59:05.605737Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 18 memories (7855 chars) into prompt
 [2m2026-04-17T01:59:05.606012Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 22 closed) into prompt
+[2m2026-04-17T02:10:06.727506Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-17T02:10:06.727605Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-17T02:10:06.728528Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 19 memories from store
+[2m2026-04-17T02:10:06.728568Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 19 memories (8017 chars) into prompt
+[2m2026-04-17T02:10:06.728723Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 23 closed) into prompt
+[2m2026-04-17T02:12:49.449129Z[0m [32m INFO[0m [2mralph::loop_runner[0m[2m:[0m All done! LOOP_COMPLETE detected in solo output.
+[2m2026-04-17T02:12:49.450026Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Wrapping up: completed. 3 iterations in 19m 39s. [3mreason[0m[2m=[0mcompleted [3miterations[0m[2m=[0m3 [3mduration[0m[2m=[0m19m 39s
+[2m2026-04-17T02:12:49.452947Z[0m [32m INFO[0m [2mralph_core::landing[0m[2m:[0m Beginning landing sequence [3mloop_id[0m[2m=[0mprimary

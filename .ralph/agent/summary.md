@@ -1,8 +1,8 @@
 # Loop Summary
 
-**Status:** Failed: too many consecutive failures
-**Iterations:** 27
-**Duration:** 2h 45m 13s
+**Status:** Completed successfully
+**Iterations:** 3
+**Duration:** 19m 39s
 
 ## Tasks
 
@@ -14,4 +14,4 @@ _No events recorded._
 
 ## Final Commit
 
-18eb460: step 22: Test mode (scope-restricted loop with production-touch escalation)
+121c635: step 25: CI + release pipeline + distribution

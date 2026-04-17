@@ -2,6 +2,10 @@
 
 ## Patterns
 
+### mem-1776391797-55c6
+> step 24: First-run onboarding scans PATH for claude/gemini/kiro-cli, prompts if unset, saves to ~/.config/forge/config.yml. Full forge doctor: 6 checks (Config/Backend/Git/ForgeDir/DiskSpace/Notifications). lifecycle_cmds.go: history/show/clean/stop/resume all implemented. Stop reads lock.json PID, sends SIGTERM, waits for PAUSED. Resume reads ledger to count done iterations, restarts loop with StartIteration offset.
+<!-- tags: cli, step24, doctor | created: 2026-04-17 -->
+
 ### mem-1776381855-da74
 > internal/planphase: Test path added. researchTest→parses framework/coverage fields. artifacts writes test-scope.md with framework+coverage target+scope. internal/loopengine: TestMode option=true fires production-touch escalation (options: m/s/a) when diff touches non-test files. isTestFile detects *_test.go, tests/, spec/, __tests__/, jest.config.js, etc. internal/compdet: PathCriteriaCheck test case = test-scope.md present + diffAddsTest. planphase.Result.TestMode wired to loopengine.Options.TestMode in commands.go.
 <!-- tags: planphase, loopengine, compdet | created: 2026-04-16 -->
