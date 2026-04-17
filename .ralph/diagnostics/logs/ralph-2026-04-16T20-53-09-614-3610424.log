@@ -1,0 +1,4 @@
+2026-04-17T01:53:09.616944Z  INFO ralph: Found existing scratchpad at '.agent/scratchpad.md', continuing from previous state
+2026-04-17T01:53:09.732035Z  INFO ralph: Spawning subprocess for TUI mode child_args=["-c", "ralph.yml", "run", "--rpc", "--continue"]
+2026-04-17T01:53:09.732209Z  INFO ralph: TUI subprocess stderr redirected to log file log_file=/home/art/Documents/dev/forge/.ralph/diagnostics/logs/ralph-2026-04-16T20-53-09-732-3610424.log
+2026-04-17T01:53:09.732723Z  INFO ralph: TUI running in subprocess RPC mode

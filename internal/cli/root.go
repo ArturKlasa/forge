@@ -6,6 +6,7 @@ import (
 	"time"
 
 	claudebackend "github.com/arturklasa/forge/internal/backend/claude"
+	"github.com/arturklasa/forge/internal/config"
 	forgegit "github.com/arturklasa/forge/internal/git"
 	forgelog "github.com/arturklasa/forge/internal/log"
 	"github.com/arturklasa/forge/internal/loopengine"
@@ -50,6 +51,28 @@ Use a subcommand:
 				Quiet:   quiet,
 				JSON:    jsonMode,
 			})
+
+			// First-run onboarding: skip for commands that don't need a backend.
+			name := cmd.Name()
+			if name != "doctor" && name != "config" && name != "backend" &&
+				name != "help" && name != "version" && name != "history" &&
+				name != "status" && name != "show" && name != "clean" &&
+				name != "stop" && name != "resume" && name != "test-utility" {
+				workDir, _ := pf.GetString("path")
+				if workDir == "" {
+					var err error
+					workDir, err = os.Getwd()
+					if err != nil {
+						return err
+					}
+				}
+				cfgMgr, err := config.Load(workDir)
+				if err == nil {
+					if err := runFirstRunOnboarding(cmd.OutOrStdout(), cfgMgr); err != nil {
+						return err
+					}
+				}
+			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {

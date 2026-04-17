@@ -263,3 +263,44 @@ func (m *Manager) ensureGitignore() error {
 func (m *Manager) ForgeDir() string {
 	return m.forgeDir
 }
+
+// RunEntry describes a run found in .forge/runs/.
+type RunEntry struct {
+	ID        string
+	Path      string
+	StartedAt time.Time
+	Marker    Marker
+}
+
+// ListRuns returns all run entries sorted by ID (lexicographic = chronological for UUID-v7).
+func (m *Manager) ListRuns() ([]RunEntry, error) {
+	runsDir := filepath.Join(m.forgeDir, "runs")
+	entries, err := os.ReadDir(runsDir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("list runs: %w", err)
+	}
+
+	var runs []RunEntry
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		runPath := filepath.Join(runsDir, e.Name())
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		rd := &RunDir{ID: e.Name(), Path: runPath, StartedAt: info.ModTime()}
+		mk, _ := m.ReadMarker(rd)
+		runs = append(runs, RunEntry{
+			ID:        e.Name(),
+			Path:      runPath,
+			StartedAt: info.ModTime(),
+			Marker:    mk,
+		})
+	}
+	return runs, nil
+}

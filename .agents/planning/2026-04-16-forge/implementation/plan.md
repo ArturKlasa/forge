@@ -49,7 +49,7 @@ Each checkbox corresponds 1:1 to a step below. Tick as you complete each step's 
 - [x] **Step 21:** Upgrade mode (dep-gate-inverted loop)
 - [x] **Step 22:** Test mode (scope-restricted loop with production-touch escalation)
 - [x] **Step 23:** Composite chaining — stage lifecycle + inter-stage contracts
-- [ ] **Step 24:** First-run onboarding + `forge doctor` + remaining CLI commands
+- [x] **Step 24:** First-run onboarding + `forge doctor` + remaining CLI commands
 - [ ] **Step 25:** CI + release pipeline + distribution (GitHub Releases / Homebrew / curl / go install)
 
 ---

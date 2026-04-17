@@ -208,6 +208,17 @@ func writeSidecar(sidecarPath, runID string) error {
 	return renameio.WriteFile(sidecarPath, data, 0o644)
 }
 
+// ReadSidecar reads the lock sidecar from forgeDir.
+// Returns an empty Sidecar and nil error if no sidecar exists.
+func ReadSidecar(forgeDir string) (Sidecar, error) {
+	path := filepath.Join(forgeDir, sidecarFile)
+	sc, err := readSidecar(path)
+	if os.IsNotExist(err) {
+		return Sidecar{}, nil
+	}
+	return sc, err
+}
+
 // readSidecar reads and parses the sidecar JSON.
 func readSidecar(sidecarPath string) (Sidecar, error) {
 	var sc Sidecar

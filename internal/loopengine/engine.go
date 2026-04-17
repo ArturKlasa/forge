@@ -72,6 +72,10 @@ type Options struct {
 	// TestMode enables per-iteration production-code-touch escalation.
 	// Set true for Test mode where any production file modification requires human approval.
 	TestMode bool
+
+	// StartIteration sets the starting iteration counter (for resume).
+	// Default 0 means start from iteration 1.
+	StartIteration int
 }
 
 // Result summarises the completed loop.
@@ -117,7 +121,8 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	// Build context manager (uses Brain if available, else fallback).
 	ctxMgr := ctxmgr.New(runDir, opts.Brain)
 
-	for i := 1; i <= opts.MaxIterations; i++ {
+	startAt := opts.StartIteration + 1
+	for i := startAt; i <= opts.StartIteration+opts.MaxIterations; i++ {
 		if err := deadlineCtx.Err(); err != nil {
 			break
 		}

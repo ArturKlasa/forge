@@ -368,3 +368,45 @@
 - All 23 packages green
 
 **Next: Step 22** — Test mode (scope-restricted loop with production-touch escalation)
+
+## 2026-04-16 — Iteration 23
+
+### Completed: Step 23 — Composite chaining package + wiring
+
+**What was done:**
+- `internal/chain` package: chain.go (Run, ChainYML, stage lifecycle, inter-stage gates), contracts.go (reviewFix/reviewRefactor/upgradeFix/upgradeTest/fixTest and generic passthrough), ui_unix/windows.go
+- Added `Predefined bool` field to `planphase.Result` struct and wired from `routerRes.Predefined`
+- Updated `internal/cli/commands.go`: replaced `ActionChain` stub with real `chain.Run()` call
+- Created `internal/chain/chain_test.go`: 5 tests (review:fix chain, inter-stage decline, unknown-contract warning, 4-stage warn, chain.yml written)
+- Updated `cli_test.go` chain_detection test to use real chain path with --yes
+- All 27 packages green
+
+**Next: Step 24** — First-run onboarding + forge doctor + remaining CLI commands
+
+## 2026-04-16 — Iteration 24
+
+### Completed: Step 24 — First-run onboarding + forge doctor + remaining CLI commands
+
+**What was done:**
+- Added `ReadSidecar(forgeDir)` to `internal/state/lock` for stop command
+- Added `ListRuns()` + `RunEntry` to `internal/state` for history/show/clean
+- Exported `ReadLedger()` from `internal/loopengine` for status/show/resume
+- Added `StartIteration int` to `loopengine.Options` for resume
+- Created `internal/cli/onboarding.go`: `runFirstRunOnboarding()` scans PATH for claude/gemini/kiro-cli, prompts user if backend unset, saves to global config
+- Created `internal/cli/doctor_full.go`: full `forge doctor` with 6 checks (Config/Backend/Git/ForgeDir/DiskSpace/Notifications), OK/WARN/FAIL per check, --verbose for details
+- Created `internal/cli/lifecycle_cmds.go`: `selectBackend()`, `printFullStatus()`, `runHistory()`, `runShow()`, `runClean()`, `runStop()`, `runResume()`
+- Updated `internal/cli/commands.go`: replaced stubs for stop/resume/history/show/clean with real implementations; replaced partial doctor with full implementation; upgraded status to use printFullStatus
+- Updated `internal/cli/root.go`: added first-run onboarding in PersistentPreRunE (skipped for doctor/config/backend/help/version/lifecycle commands)
+- Updated `internal/cli/cli_test.go`: replaced TestUnimplementedStubs with TestLifecycleCommands; added TestDoctorCommand and TestHistoryWithRuns
+- All 27 packages pass
+
+**Demo verified:**
+- `forge history` → "No runs found." / shows run table with ID+STATE+STARTED
+- `forge clean` → "Nothing to clean."
+- `forge stop` → "No active run to stop."
+- `forge status` → "No active run." / shows run details
+- `forge show <id>` → shows run artifacts
+- `forge doctor` → all checks with OK/WARN/FAIL icons
+- `forge doctor --verbose` → detailed check info
+
+**Next: Step 25** — CI + release pipeline + distribution

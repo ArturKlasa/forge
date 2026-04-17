@@ -60,6 +60,11 @@ func appendLedger(runDir string, entry LedgerEntry) error {
 	return enc.Encode(entry)
 }
 
+// ReadLedger reads all entries from ledger.jsonl in the given run directory.
+func ReadLedger(runDir string) ([]LedgerEntry, error) {
+	return readLedger(runDir)
+}
+
 // readLedger reads all entries from ledger.jsonl.
 func readLedger(runDir string) ([]LedgerEntry, error) {
 	path := filepath.Join(runDir, "ledger.jsonl")

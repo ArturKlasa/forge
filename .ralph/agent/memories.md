@@ -2,6 +2,10 @@
 
 ## Patterns
 
+### mem-1776381855-da74
+> internal/planphase: Test path added. researchTest→parses framework/coverage fields. artifacts writes test-scope.md with framework+coverage target+scope. internal/loopengine: TestMode option=true fires production-touch escalation (options: m/s/a) when diff touches non-test files. isTestFile detects *_test.go, tests/, spec/, __tests__/, jest.config.js, etc. internal/compdet: PathCriteriaCheck test case = test-scope.md present + diffAddsTest. planphase.Result.TestMode wired to loopengine.Options.TestMode in commands.go.
+<!-- tags: planphase, loopengine, compdet | created: 2026-04-16 -->
+
 ### mem-1776380628-4526
 > internal/planphase: Add/Fix/Refactor paths fully implemented. researchAdd→codebase-map.md+specs.md; researchFix→bug.md+repro section; researchRefactor→invariants.md+target-shape.md. Refactor pre-loop gate fires before main confirm; 'n' at gate→ABORTED. internal/compdet: PathCriteriaCheck(path, runDir, diff) wired into loop engine (iterDiff variable). Fix path checks: bug.md present + diff adds test func/file.
 <!-- tags: planphase, compdet, loopengine | created: 2026-04-16 -->

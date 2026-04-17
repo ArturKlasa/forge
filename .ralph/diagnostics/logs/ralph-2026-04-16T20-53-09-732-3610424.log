@@ -1,0 +1,13 @@
+[2m2026-04-17T01:53:09.736729Z[0m [32m INFO[0m [2mralph[0m[2m:[0m Found existing scratchpad at '.agent/scratchpad.md', continuing from previous state
+Preflight: ✓ config ✓ hooks ✓ backend ✓ telegram ⚠ git ✓ paths ✓ tools ✓ specs (1 warning)
+[2m2026-04-17T01:53:09.844577Z[0m [33m WARN[0m [2mralph::loop_runner[0m[2m:[0m Interactive mode requested but stdout is not a TTY, falling back to autonomous
+[2m2026-04-17T01:53:09.846013Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-17T01:53:09.846026Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-17T01:53:09.848813Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 18 memories from store
+[2m2026-04-17T01:53:09.848831Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 18 memories (7855 chars) into prompt
+[2m2026-04-17T01:53:09.848948Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 1 open, 21 closed) into prompt
+[2m2026-04-17T01:59:05.605328Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Memory injection check: enabled=true, inject=Auto, workspace_root="/home/art/Documents/dev/forge"
+[2m2026-04-17T01:59:05.605384Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Looking for memories at: "/home/art/Documents/dev/forge/.ralph/agent/memories.md" (exists: true)
+[2m2026-04-17T01:59:05.605685Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Successfully loaded 18 memories from store
+[2m2026-04-17T01:59:05.605737Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting 18 memories (7855 chars) into prompt
+[2m2026-04-17T01:59:05.606012Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Injecting ready tasks (0 ready, 0 open, 22 closed) into prompt

@@ -1,14 +1,14 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
-
-	"context"
 
 	"github.com/arturklasa/forge/internal/backend"
 	claudebackend "github.com/arturklasa/forge/internal/backend/claude"
@@ -156,33 +156,16 @@ func newStatusCmd() *cobra.Command {
 					return err
 				}
 			}
-
 			mgr := state.NewManager(workDir)
 			if err := mgr.Init(); err != nil {
 				return fmt.Errorf("state init: %w", err)
 			}
-
-			current, err := mgr.CurrentRun()
-			if err != nil {
-				return fmt.Errorf("read current run: %w", err)
-			}
-			if current == nil {
-				fmt.Fprintln(cmd.OutOrStdout(), "No active run.")
-				return nil
-			}
-
-			mk, err := mgr.ReadMarker(current)
-			if err != nil {
-				return fmt.Errorf("read marker: %w", err)
-			}
-
-			elapsed := time.Since(current.StartedAt).Round(time.Second)
-			fmt.Fprintf(cmd.OutOrStdout(), "Run:   %s\nState: %s (started %s ago)\n",
-				current.ID, mk, elapsed)
-			return nil
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			runID, _ := cmd.Flags().GetString("run")
+			return printFullStatus(cmd.OutOrStdout(), mgr, runID, verbose)
 		},
 	}
-	cmd.Flags().Bool("verbose", false, "Show detailed status")
+	cmd.Flags().Bool("verbose", false, "Show detailed status including ledger")
 	cmd.Flags().String("run", "", "Run ID to query")
 	return cmd
 }
@@ -311,63 +294,117 @@ func newTestUtilityCmd() *cobra.Command {
 	return cmd
 }
 
-// newStopCmd returns the `stop` subcommand stub.
+// newStopCmd returns the `stop` subcommand.
 func newStopCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop",
 		Short: "Stop the currently running task",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not implemented yet (scheduled for step 24)")
+			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			if workDir == "" {
+				var err error
+				workDir, err = os.Getwd()
+				if err != nil {
+					return err
+				}
+			}
+			forgeDir := filepath.Join(workDir, ".forge")
+			return runStop(cmd.OutOrStdout(), forgeDir)
 		},
 	}
 }
 
-// newResumeCmd returns the `resume` subcommand stub.
+// newResumeCmd returns the `resume` subcommand.
 func newResumeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "resume [run-id]",
 		Short: "Resume a paused or interrupted run",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not implemented yet (scheduled for step 24)")
+			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			if workDir == "" {
+				var err error
+				workDir, err = os.Getwd()
+				if err != nil {
+					return err
+				}
+			}
+			mgr := state.NewManager(workDir)
+			if err := mgr.Init(); err != nil {
+				return fmt.Errorf("state init: %w", err)
+			}
+			runID := ""
+			if len(args) == 1 {
+				runID = args[0]
+			}
+			return runResume(cmd.Context(), cmd.OutOrStdout(), mgr, workDir, runID)
 		},
 	}
 }
 
-// newHistoryCmd returns the `history` subcommand stub.
+// newHistoryCmd returns the `history` subcommand.
 func newHistoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "history",
 		Short: "List past runs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not implemented yet (scheduled for step 24)")
+			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			if workDir == "" {
+				var err error
+				workDir, err = os.Getwd()
+				if err != nil {
+					return err
+				}
+			}
+			mgr := state.NewManager(workDir)
+			full, _ := cmd.Flags().GetBool("full")
+			return runHistory(cmd.Context(), cmd.OutOrStdout(), mgr, full)
 		},
 	}
 	cmd.Flags().Bool("full", false, "Show full history without truncation")
 	return cmd
 }
 
-// newShowCmd returns the `show` subcommand stub.
+// newShowCmd returns the `show` subcommand.
 func newShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <run-id>",
 		Short: "Show details of a specific run",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not implemented yet (scheduled for step 24)")
+			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			if workDir == "" {
+				var err error
+				workDir, err = os.Getwd()
+				if err != nil {
+					return err
+				}
+			}
+			mgr := state.NewManager(workDir)
+			iter, _ := cmd.Flags().GetInt("iter")
+			return runShow(cmd.OutOrStdout(), mgr, args[0], iter)
 		},
 	}
 	cmd.Flags().Int("iter", 0, "Show a specific iteration number")
 	return cmd
 }
 
-// newCleanCmd returns the `clean` subcommand stub.
+// newCleanCmd returns the `clean` subcommand.
 func newCleanCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "clean",
 		Short: "Remove stale run state and temporary files",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not implemented yet (scheduled for step 24)")
+			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			if workDir == "" {
+				var err error
+				workDir, err = os.Getwd()
+				if err != nil {
+					return err
+				}
+			}
+			mgr := state.NewManager(workDir)
+			return runClean(cmd.OutOrStdout(), mgr, retentionMaxRuns(workDir))
 		},
 	}
 }
@@ -552,114 +589,43 @@ func newConfigEditCmd() *cobra.Command {
 	return cmd
 }
 
-// newDoctorCmd returns the `doctor` subcommand (partially wired in step 6: git checks).
+// newDoctorCmd returns the `doctor` subcommand with full checks.
 func newDoctorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Diagnose forge installation and dependencies",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := runDoctorGitChecks(cmd); err != nil {
-				return err
+			workDir, _ := cmd.Root().PersistentFlags().GetString("path")
+			if workDir == "" {
+				var err error
+				workDir, err = os.Getwd()
+				if err != nil {
+					return err
+				}
 			}
-			return runDoctorNotifyChecks(cmd)
+			out := cmd.OutOrStdout()
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			runFullDoctor(cmd.Context(), out, workDir, verbose)
+
+			testNotify, _ := cmd.Flags().GetBool("test-notify")
+			if testNotify {
+				fmt.Fprintln(out, "\nSending test notification through all channels...")
+				channels := notify.DefaultChannels("", out)
+				attempts := notify.SendTestNotify(cmd.Context(), channels, out)
+				for _, a := range attempts {
+					status := "OK"
+					if !a.OK {
+						status = "FAIL (" + a.Err + ")"
+					}
+					fmt.Fprintf(out, "  %-10s %s\n", a.Channel+":", status)
+				}
+			}
+			return nil
 		},
 	}
+	cmd.Flags().Bool("verbose", false, "Show detailed output for each check")
 	cmd.Flags().Bool("test-notify", false, "Send a test notification through all channels (with consent)")
 	cmd.Flags().MarkHidden("test-notify")
 	return cmd
 }
 
-// runDoctorGitChecks performs git-related diagnostics for forge doctor.
-func runDoctorGitChecks(cmd *cobra.Command) error {
-	ctx := cmd.Context()
-
-	// git version
-	v, err := forgegit.Version(ctx)
-	if err != nil {
-		fmt.Fprintln(cmd.OutOrStdout(), "git: MISSING (install git and retry)")
-	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "git: OK (version %s)\n", v)
-	}
-
-	// repo check
-	workDir, _ := cmd.Root().PersistentFlags().GetString("path")
-	if workDir == "" {
-		workDir, _ = os.Getwd()
-	}
-	g := forgegit.New(workDir)
-	if !g.IsRepo(ctx) {
-		fmt.Fprintln(cmd.OutOrStdout(), "repo: not a git repository")
-		return nil
-	}
-
-	sha, branch, err := g.HEAD(ctx)
-	if err != nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "repo: ERROR (%v)\n", err)
-	} else {
-		short := sha
-		if len(short) > 7 {
-			short = short[:7]
-		}
-		fmt.Fprintf(cmd.OutOrStdout(), "repo: OK (HEAD=%s on %s)\n", short, branch)
-	}
-
-	// protected-branch detection
-	branches, source := g.DetectProtectedBranches(ctx, nil)
-	if len(branches) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "protected branches: none detected")
-	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "protected branches: %s (detected via %s)\n",
-			joinBranches(branches), source)
-	}
-
-	return nil
-}
-
-// runDoctorNotifyChecks prints the env-probe results and optionally fires a
-// test notification through all channels.
-func runDoctorNotifyChecks(cmd *cobra.Command) error {
-	out := cmd.OutOrStdout()
-	p := notify.Probe()
-
-	fmt.Fprintln(out, "\n--- notification probe ---")
-	fmt.Fprintf(out, "dbus_session:    %v\n", p.DBusSession)
-	fmt.Fprintf(out, "display:         %v\n", p.Display)
-	fmt.Fprintf(out, "ssh_session:     %v\n", p.SSHSession)
-	fmt.Fprintf(out, "tmux_session:    %v\n", p.TmuxSession)
-	fmt.Fprintf(out, "wsl:             %v\n", p.IsWSL)
-	fmt.Fprintf(out, "ci:              %v\n", p.IsCI)
-	fmt.Fprintf(out, "notify_likely:   %v\n", p.NotifyLikelyReachesUser())
-
-	if p.RecommendAutoResolve() {
-		fmt.Fprintln(out, "WARN: OS notifications may not reach you in this environment.")
-		fmt.Fprintln(out, "      Consider: --auto-resolve accept-recommended")
-	}
-
-	testNotify, _ := cmd.Flags().GetBool("test-notify")
-	if !testNotify {
-		return nil
-	}
-
-	fmt.Fprintln(out, "\nSending test notification through all channels...")
-	channels := notify.DefaultChannels("", out)
-	attempts := notify.SendTestNotify(cmd.Context(), channels, out)
-	for _, a := range attempts {
-		status := "OK"
-		if !a.OK {
-			status = "FAIL (" + a.Err + ")"
-		}
-		fmt.Fprintf(out, "  %-10s %s\n", a.Channel+":", status)
-	}
-	return nil
-}
-
-func joinBranches(branches []string) string {
-	result := ""
-	for i, b := range branches {
-		if i > 0 {
-			result += ", "
-		}
-		result += b
-	}
-	return result
-}

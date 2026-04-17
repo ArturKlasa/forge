@@ -84,46 +84,60 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-// TestUnimplementedStubs verifies every remaining stub returns a non-zero exit
-// and the "not implemented yet" message with the expected step reference.
-func TestUnimplementedStubs(t *testing.T) {
-	type testCase struct {
-		args  []string
-		step  int
-		inDir bool // run with a temp workdir
-	}
-	cases := []testCase{
-		{[]string{"stop"}, 24, false},
-		{[]string{"resume"}, 24, false},
-		{[]string{"history"}, 24, false},
-		{[]string{"show", "fake-run-id"}, 24, false},
-		{[]string{"clean"}, 24, false},
-		// doctor is partially implemented in step 6 (git checks)
-		// plan is implemented in step 10 — removed from stubs list
-		// "some task description" now runs the loop engine (step 12) — no longer a stub
-	}
+// TestLifecycleCommands verifies that step-24 commands are implemented and
+// produce sensible output rather than stub errors.
+func TestLifecycleCommands(t *testing.T) {
+	dir := t.TempDir()
 
-	for _, tc := range cases {
-		tc := tc
-		t.Run(strings.Join(tc.args, "_"), func(t *testing.T) {
-			var err error
-			if tc.inDir {
-				_, _, err = executeInDir(t.TempDir(), tc.args...)
-			} else {
-				_, _, err = execute(tc.args...)
-			}
-			if err == nil {
-				t.Fatal("expected an error, got nil")
-			}
-			if !strings.Contains(err.Error(), "not implemented yet") {
-				t.Errorf("expected 'not implemented yet' in error, got: %q", err.Error())
-			}
-			wantStep := fmt.Sprintf("step %d", tc.step)
-			if !strings.Contains(err.Error(), wantStep) {
-				t.Errorf("expected step reference %q in error, got: %q", wantStep, err.Error())
-			}
-		})
-	}
+	t.Run("history_empty", func(t *testing.T) {
+		out, _, err := executeInDir(dir, "history")
+		if err != nil {
+			t.Fatalf("history: unexpected error: %v", err)
+		}
+		if !strings.Contains(out, "No runs found") {
+			t.Errorf("expected 'No runs found', got: %q", out)
+		}
+	})
+
+	t.Run("clean_nothing", func(t *testing.T) {
+		out, _, err := executeInDir(dir, "clean")
+		if err != nil {
+			t.Fatalf("clean: unexpected error: %v", err)
+		}
+		if !strings.Contains(out, "Nothing to clean") {
+			t.Errorf("expected 'Nothing to clean', got: %q", out)
+		}
+	})
+
+	t.Run("show_unknown_run", func(t *testing.T) {
+		_, _, err := executeInDir(dir, "show", "nonexistent-run-id")
+		if err == nil {
+			t.Fatal("expected error for unknown run, got nil")
+		}
+		if !strings.Contains(err.Error(), "not found") {
+			t.Errorf("expected 'not found' in error, got: %q", err.Error())
+		}
+	})
+
+	t.Run("resume_no_run", func(t *testing.T) {
+		_, _, err := executeInDir(dir, "resume")
+		if err == nil {
+			t.Fatal("expected error when no active run, got nil")
+		}
+		if !strings.Contains(err.Error(), "no active run") {
+			t.Errorf("expected 'no active run' in error, got: %q", err.Error())
+		}
+	})
+
+	t.Run("stop_no_run", func(t *testing.T) {
+		out, _, err := executeInDir(dir, "stop")
+		if err != nil {
+			t.Fatalf("stop: unexpected error: %v", err)
+		}
+		if !strings.Contains(out, "No active run to stop") {
+			t.Errorf("expected 'No active run to stop', got: %q", out)
+		}
+	})
 }
 
 // TestStatusCommand verifies forge status output with and without an active run.
@@ -155,6 +169,55 @@ func TestStatusCommand(t *testing.T) {
 	}
 	if !strings.Contains(out, "RUNNING") {
 		t.Errorf("expected RUNNING in output, got: %q", out)
+	}
+}
+
+// TestDoctorCommand verifies that forge doctor runs without error and produces output.
+func TestDoctorCommand(t *testing.T) {
+	dir := t.TempDir()
+	out, _, err := executeInDir(dir, "doctor")
+	if err != nil {
+		t.Fatalf("doctor: unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "Config") {
+		t.Errorf("expected 'Config' check in doctor output, got: %q", out)
+	}
+	if !strings.Contains(out, "Git") {
+		t.Errorf("expected 'Git' check in doctor output, got: %q", out)
+	}
+	if !strings.Contains(out, "Disk space") {
+		t.Errorf("expected 'Disk space' check in doctor output, got: %q", out)
+	}
+}
+
+// TestHistoryWithRuns verifies that forge history lists runs.
+func TestHistoryWithRuns(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a test run.
+	_, _, err := executeInDir(dir, "test-utility", "create-test-run", "hist-run-001")
+	if err != nil {
+		t.Fatalf("create-test-run: %v", err)
+	}
+
+	out, _, err := executeInDir(dir, "history")
+	if err != nil {
+		t.Fatalf("history: unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "hist-run-001") {
+		t.Errorf("expected run ID in history, got: %q", out)
+	}
+	if !strings.Contains(out, "RUNNING") {
+		t.Errorf("expected RUNNING state in history, got: %q", out)
+	}
+
+	// forge show should work too.
+	out, _, err = executeInDir(dir, "show", "hist-run-001")
+	if err != nil {
+		t.Fatalf("show: unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "hist-run-001") {
+		t.Errorf("expected run ID in show output, got: %q", out)
 	}
 }
 
