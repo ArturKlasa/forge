@@ -73,14 +73,14 @@ func TestHelpCommands(t *testing.T) {
 	}
 }
 
-// TestVersion verifies that --version prints "forge 0.0.1".
+// TestVersion verifies that --version prints "forge <version>".
 func TestVersion(t *testing.T) {
 	out, _, err := execute("--version")
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
-	if !strings.Contains(out, "forge 0.0.1") {
-		t.Errorf("expected version output to contain 'forge 0.0.1', got: %q", out)
+	if !strings.HasPrefix(out, "forge ") {
+		t.Errorf("expected version output to start with 'forge ', got: %q", out)
 	}
 }
 

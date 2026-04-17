@@ -1,4 +1,4 @@
 package version
 
-// Version is the current version of forge.
-const Version = "0.0.1"
+// Version is set via -ldflags at build time; falls back to dev.
+var Version = "dev"

@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build cross-platform binaries
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          mkdir -p dist
+          LDFLAGS="-X github.com/arturklasa/forge/internal/version.Version=${VERSION}"
+          for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os=${platform%/*}
+            arch=${platform#*/}
+            output="dist/forge_${os}_${arch}"
+            [ "$os" = "windows" ] && output="${output}.exe"
+            echo "Building $output ..."
+            GOOS=$os GOARCH=$arch go build -ldflags "$LDFLAGS" -o "$output" ./cmd/forge
+          done
+          cd dist && sha256sum forge_* > SHA256SUMS
+
+      - name: Generate CHANGELOG excerpt
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log --oneline "${PREV_TAG}..HEAD" 2>/dev/null || echo "Initial release")
+          else
+            CHANGES=$(git log --oneline 2>/dev/null | head -20)
+          fi
+          {
+            echo "EXCERPT<<EOF"
+            echo "$CHANGES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Forge ${{ github.ref_name }}"
+          body: |
+            ## What's Changed
+
+            ${{ steps.changelog.outputs.EXCERPT }}
+
+            ## Installation
+
+            **Homebrew:**
+            ```sh
+            brew tap arturklasa/forge
+            brew install forge
+            ```
+
+            **curl installer:**
+            ```sh
+            curl -fsSL https://raw.githubusercontent.com/arturklasa/forge/main/scripts/install.sh | sh
+            ```
+
+            **go install:**
+            ```sh
+            go install github.com/arturklasa/forge/cmd/forge@${{ github.ref_name }}
+            ```
+
+            **SHA256 checksums:** see `SHA256SUMS` asset below.
+          files: |
+            dist/forge_*
+            dist/SHA256SUMS
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
