@@ -201,8 +201,8 @@ func TestRunIteration_Timeout(t *testing.T) {
 func TestSessionLeakPrevention(t *testing.T) {
 	// We capture the args that would be passed by inspecting buildArgs directly.
 	a := New()
-	args1 := a.buildArgs("uuid-1", backend.IterationOpts{})
-	args2 := a.buildArgs("uuid-2", backend.IterationOpts{})
+	args1 := a.buildArgs("uuid-1", "test prompt", backend.IterationOpts{})
+	args2 := a.buildArgs("uuid-2", "test prompt", backend.IterationOpts{})
 
 	check := func(args []string, sessionID string) {
 		var hasSessionID, hasNoPersist bool
@@ -236,7 +236,7 @@ func TestSessionLeakPrevention(t *testing.T) {
 // TestBuildArgs_AllowedTools verifies --allowedTools flag is included.
 func TestBuildArgs_AllowedTools(t *testing.T) {
 	a := New()
-	args := a.buildArgs("sid", backend.IterationOpts{
+	args := a.buildArgs("sid", "test prompt", backend.IterationOpts{
 		AllowedTools: []string{"Bash", "Read", "Edit"},
 	})
 

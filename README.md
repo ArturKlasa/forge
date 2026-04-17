@@ -6,7 +6,7 @@ Forge orchestrates long-running AI coding tasks by driving AI CLIs (Claude Code,
 
 **go install** (requires Go 1.22+):
 ```bash
-go install github.com/ArturKlasa/forge/cmd/forge@latest
+go install github.com/arturklasa/forge/cmd/forge@latest
 ```
 
 **curl installer** (Linux / macOS):

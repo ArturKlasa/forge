@@ -92,16 +92,14 @@ func (a *Adapter) RunIteration(ctx context.Context, prompt backend.Prompt, opts 
 
 	sessionID := uuid.New().String()
 
-	args := a.buildArgs(sessionID, opts)
-
-	cmd := exec.CommandContext(ctx, a.executable, args...)
-
-	// Feed prompt via stdin.
 	promptBody, err := resolvePrompt(prompt)
 	if err != nil {
 		return backend.IterationResult{}, fmt.Errorf("resolve prompt: %w", err)
 	}
-	cmd.Stdin = strings.NewReader(promptBody)
+
+	args := a.buildArgs(sessionID, promptBody, opts)
+
+	cmd := exec.CommandContext(ctx, a.executable, args...)
 
 	// Capture stdout separately for streaming; stderr goes to ring buffer.
 	var stdoutBuf bytes.Buffer
@@ -123,10 +121,10 @@ func (a *Adapter) RunIteration(ctx context.Context, prompt backend.Prompt, opts 
 }
 
 // buildArgs assembles the claude CLI argument list.
-func (a *Adapter) buildArgs(sessionID string, opts backend.IterationOpts) []string {
+func (a *Adapter) buildArgs(sessionID, prompt string, opts backend.IterationOpts) []string {
 	args := []string{
 		"--bare",
-		"-p",
+		"-p", prompt,
 		"--output-format", "stream-json",
 		"--verbose",
 		"--permission-mode", "dontAsk",
