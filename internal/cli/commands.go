@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"context"
-	"strings"
 
 	"github.com/arturklasa/forge/internal/backend"
 	claudebackend "github.com/arturklasa/forge/internal/backend/claude"
 	geminibackend "github.com/arturklasa/forge/internal/backend/gemini"
 	kirobackend "github.com/arturklasa/forge/internal/backend/kiro"
+	"github.com/arturklasa/forge/internal/chain"
 	"github.com/arturklasa/forge/internal/config"
 	forgegit "github.com/arturklasa/forge/internal/git"
 	forgelog "github.com/arturklasa/forge/internal/log"
@@ -86,12 +86,20 @@ func newPlanCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 			switch res.Action {
 			case planphase.ActionChain:
-				fmt.Fprintf(out, "Detected: %s chain\n", res.ChainKey)
-				for i, p := range res.Chain {
-					fmt.Fprintf(out, "Stages: %d/%s\n", i+1, strings.Title(string(p)))
-				}
-				fmt.Fprintln(out, "(Composite chaining implemented in step 23)")
-				return nil
+				be := claudebackend.New()
+				_, chainErr := chain.Run(cmd.Context(), chain.Options{
+					Task:         task,
+					Chain:        res.Chain,
+					ChainKey:     res.ChainKey,
+					Predefined:   res.Predefined,
+					Backend:      be,
+					GitHelper:    forgegit.New(workDir),
+					StateManager: state.NewManager(workDir),
+					WorkDir:      workDir,
+					Output:       out,
+					ForceYes:     yesFlag,
+				})
+				return chainErr
 			case planphase.ActionAbort:
 				return nil
 			default:

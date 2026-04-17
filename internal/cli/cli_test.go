@@ -187,15 +187,16 @@ func newCleanGitRepo(t *testing.T) string {
 
 // TestPlanCommand verifies that `forge plan` detects intent correctly.
 func TestPlanCommand(t *testing.T) {
-	// Chain detection: plan returns early (before pre-gates) — no git repo needed.
+	// Chain detection: plan detects a review:fix chain and runs it with --yes.
 	t.Run("chain_detection", func(t *testing.T) {
 		dir := t.TempDir()
-		out, _, err := executeInDir(dir, "plan", "Review and fix the auth module")
+		out, _, err := executeInDir(dir, "plan", "--yes", "Review and fix the auth module")
 		if err != nil {
 			t.Fatalf("plan chain: unexpected error: %v", err)
 		}
-		if !strings.Contains(out, "review:fix chain") {
-			t.Errorf("expected 'review:fix chain' in output, got: %q", out)
+		// The chain engine prints a stage header for each stage.
+		if !strings.Contains(out, "Stage") {
+			t.Errorf("expected stage output in chain run, got: %q", out)
 		}
 	})
 

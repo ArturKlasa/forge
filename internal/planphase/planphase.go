@@ -42,8 +42,9 @@ type Result struct {
 	RunDir   *state.RunDir
 	Path     router.Path
 	Branch   string
-	ChainKey string       // set when Action == ActionChain
-	Chain    []router.Path // set when Action == ActionChain
+	ChainKey   string        // set when Action == ActionChain
+	Chain      []router.Path // set when Action == ActionChain
+	Predefined bool          // set when Action == ActionChain; true if chain has a predefined contract
 	// DepGateInverted is true for Upgrade mode — dep-manifest changes are expected,
 	// not treated as hard-stop gate hits.
 	DepGateInverted bool
@@ -113,12 +114,12 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	if routerRes.IsChain {
-		// Chain handling is not yet fully implemented (step 23).
 		return &Result{
-			Action:   ActionChain,
-			Path:     routerRes.Chain[0],
-			ChainKey: routerRes.ChainKey,
-			Chain:    routerRes.Chain,
+			Action:     ActionChain,
+			Path:       routerRes.Chain[0],
+			ChainKey:   routerRes.ChainKey,
+			Chain:      routerRes.Chain,
+			Predefined: routerRes.Predefined,
 		}, nil
 	}
 
